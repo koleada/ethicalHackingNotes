@@ -1,0 +1,7 @@
+Practical Methodology: 
+
+1. content discovery: only way to discover api content is really by fuzzing. 
+  	use ffuf (or maybe checkout feroxbuster if feeling roudy) 	to perform a recursive fuzz on the api. 
+	
+	***** use the seclist/webcontent/api/ wordlists for this.  	
+	ffuf is also capable of issuing post requests! Well want 	to test what methods the API accepts prior to fuzzing

@@ -1,0 +1,14 @@
+Practical Methodology:
+
+1. Run param miner on everything! 
+    - if param miner doesnt show many, try using arjun with a wordlist to find other hidden query parameters 
+
+2. Learn how the cache behaves. Try to find a cache oracle (a page that provides useful response headers showing hwo the cahce behaves)
+   The cache oracle could, worse case, be a page where we can see a time difference that indicates caching, of course this will always
+   be a cacheable page. 
+
+3. Study the behavior and play with things to get the response cached (look at otehr notes for more infromation) use a cachebuster here 
+
+4. exploit
+
+** for each of the vulnerabilties in the cache-implementation-flaws doc, param miner offers specicialized options to find each one individually. This could be useful for specifcalized testing after the guess everything! identifies something. 
