@@ -1,0 +1,36 @@
+SSTI - server side template injection
+when doing bug bounties during the initial recon phase (site mapping using burp or ZAP) we should be inputing different vectors
+in every possible spot to be checking for possible stored xss or SSTI. server side template injection is where we insert a tag
+of some sort to break out of the html and give us the possibility to inject malicious code. These when developers use a template to help with dynamic page
+generation. Our user input goes in the template and then is rendered on the page.
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+testing: similar to XSS testing. Detect as soon as possible (test for it when mapping the site like xss), identify the template being used, exploit
+
+Detecting SSTI:
+ex: personal_greeting=username}}<tag>
+    Hello user01 <tag>
+brackets are used to break the jquery used in the page functionality
+
+or just use ${7*7} - this allows for the broadest detection possible, when server returns something different we have likely identified SSTI or CSTI
+
+ex of another playload: <img src=x>'”${{7*7}} -- this tests for HTML injection, JS context XSS, SSTI and CSTI
+---------------------------------------------------------------------------------
+Determining what template engine is used:
+enter attack vector {{7*7}} if you get something different back continue on if it is the same the engine is likley not vulnerable and we should keep looking for other things
+
+if continueing to detect try: {{7’*7’}} IF you’d get 49 back, The templating engine is Twig, move on to the exploit chapter. IF you get 7777777 back, 
+the templating engine is Jinja2, move on the exploit. IF neither get returned there is no likely vulnerability, but try next vector
+
+next detection vector: A{*comment*}b if it resolves the templating engine is Smarty. IF it doesn’t resolve, move on to the next step.
+
+final detection vector: ${“z”.join{“ab”}} IF it resolves, the templating engine is Mako. IF it doesn’t resolve, there is probably no SSTI, move on the CSTI.
+---------------------------------------------------------------------------------
+Exploiting:
+look up exploits for the specific template engine, look up the manual for the template engine 
+portswigger research article has a lot of great exploits for each template engine.
+
+to test for this we can input a payload like the one shown below and examine the error message to see what we can get away with
+parameter=${{<%[%'"}}%\.	often the server will respond with an error message reflecting the template engine. 
+
+once we identify template injection we then need to idenitfy the template engine being use (osoemtimes can be done with something like what is shown above) 
+we can also find lists of payloads to check for this and use automation 
