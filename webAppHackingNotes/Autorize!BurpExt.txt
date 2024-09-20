@@ -1,4 +1,4 @@
-Autorize burp extension! Seems easy and awesome 
+ Autorize burp extension! Seems easy and awesome 
 If you've ever manually tested a reasonably large web application for access control issues, then you probably know it's no fun. 
 It takes forever and bores most pentesters to tears. Fortunately, a convenient pentesting tool called Autorize can help you make light work of this task.
 
@@ -7,3 +7,5 @@ Next, browse the app, using the cookies of a user who does have privileged acces
 Autorize will repeat your requests as if it is a non-privileged user. It then logs the status of these attempts in a color-coded table.
 
 https://portswigger.net/bappstore/f9bbac8c4acf4aefa4d7dc92a991af2f for more info!!
+
+This tool is mainly good for testing for session mismanagement and broken authentication/access controls. This should be tested on all targets as it is considered a pretty sever vulnerabilitiy. So we would essenetially have a privledged user and an un privlegded user or one with less privledges. We would then put the cookie of one account in autorize and browse on the other account and see if we can access unintended functionality.

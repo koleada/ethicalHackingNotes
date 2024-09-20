@@ -1,0 +1,5 @@
+Autorepeater is an AWESOME tool in burp. 
+
+This is the best tool by far when looking for IDOR. We can simply configure a "base replacement" using data for 2 accounts we control. Basically, we want to find a string or value that seems sensative and could lead to IDOR like a user id or something. Then we click add, then add the 2 sensative values, one in match and one in replace. 
+*** Be sure to change replace first to replace all as we want all occurrences to be swapped***
+ Autorepeater will then automatically switch these two values as we browse. Once configured we want to thoroughly browse the application and try to hit ALL features and functionality especially the sensative stuff more likely to reference the sensative IDs/values. After that, it's as simple as activating the tool and browsing the app. Have to add this one into the arsenal for all applications.
