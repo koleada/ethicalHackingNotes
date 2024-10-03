@@ -1,0 +1,4 @@
+MOST IMPORTANT: refer to notes because it is very specific in terms of what the content length has to be, how to structure the TE (hex or just 0) etc. Small errors could mean missing a bug so be sure to read while using these payloads
+
+
+** to do this find all accessible BB reports on this and steal their payloads. ALSO rewatch the BB reports explained video. Read/watch blogs, talks, presentations etc. This will be a request smuggling payload/obfuscation repo.

