@@ -1,0 +1,28 @@
+For request smuggling we have to have the "Connection: keep-alive" header. Also for some payloads we have to put in the correct hex content length for the transfer encoding chunked header. Of course, this depends what configuration we find eg TE.CL vs CL.TE. Its very easy to look up payloads/hex values. Further we HAVE to use turbo intruder when testing for this. 
+
+We can also use a payload that, if works, sends a request to a domain we control. This should also be paired with a 404 from the website. Refer to this article for details && the turbo intruder script : https://infosecwriteups.com/get-paid-by-smuggling-the-legal-way-c31805de3c59
+	- This work by smuggling in a host header of a domain we control. Since the request is smuggled the 	  host header & the other headers/ query params will not be checked as they normally would. This 	  often introduces xss or potentially defacement / phishing directly on their site which will go to 	  random users. One of the most common impact is just open redirect to the smuggled host header. 	  This will redirect any users who visit the target to your own server.. big impact. 
+
+**also note when we believe we have a vulnerability we may have to check it from our phone (using cell service not wifi) to confirm the socket is properly poisoned even from a different network.  
+
+** only CL.TE with use a 0 for the first hex value. TE.CL will need to have the correct hex value as per the length of the smuggled chunked request. 
+
+Ex. CL.TE
+POST / HTTP/1.1
+Host: vulnerable-website.com
+Content-Length: 13
+Transfer-Encoding: chunked
+
+0
+
+SMUGGLED
+------------------------------
+EX. TE.CL -- NOTE the content length is only 3 here 
+POST / HTTP/1.1
+Host: vulnerable-website.com
+Content-Length: 3
+Transfer-Encoding: chunked
+
+8
+SMUGGLED
+0

