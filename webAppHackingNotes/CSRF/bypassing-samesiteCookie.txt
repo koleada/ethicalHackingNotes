@@ -1,0 +1,91 @@
+Bypassing SameSite Cookie for CSRF:
+
+SameSite Basics: 
+
+The samesite cookie is either set by the server or, if the server does not specify, the browser sets it by default. There are 3 possible values for the samesite cookie: none, lax and strict. Chrome sets it to lax if one is not supplied. 
+
+The samesite cookie attempts to protect against CSRF, CORS and other client side bugs. 
+
+SameSite is not to be confused with Same Origin. The main difference is that sameSite will accept all subdomains for a particular site it will also accepts any port. SamOrigin requires the exact same subdomain and port. Both samesite and sameorigin requires same scheme (eg. http vs https), and the same eTLD (.com, .net, .co.uk ...) 
+
+Specifcially what SameSite does is allow devs to restrict what websites their website will send cookies to. Again this is done to mitigate CSRF and CORS. 
+
+To observe the SamSite value, look in the Set-Cookie response header. If we ever see none we should be interested. However there are many ways to bypass some of the more strict values. The header will look something like this: 
+	Set-Cookie: session=0F8tgdOhi9ynR1M9wa3ODa; SameSite=Strict
+If the website issuing the cookie doesn't explicitly set a SameSite attribute, Chrome automatically applies Lax restrictions by default. This means that the cookie is only sent in cross-site requests that meet specific criteria, even though the developers never configured this behavior. As this is a proposed new standard, we expect other major browsers to adopt this behavior in future.
+
+SameSite=Strict: 
+Strict means that the browser will not send that cookie in any cross-site requests. In simple terms, this means that if the target site for the request does not match the site currently shown in the browser's address bar, it will not include the cookie. This should be used when the cookie being set can allow the user to access authenticated functionality or perform sensitive actions. 
+
+SameSite=Lax: 
+Lax SameSite restrictions mean that browsers will send the cookie in cross-site requests, but only if both of the following conditions are met:
+- The request uses the GET method.
+- The request resulted from a top-level navigation by the user, such as clicking on a link.
+**This is very important. Often we can still submit form data even with a GET request. We can literally jsut change request type and it will often work.**
+Also, the cookie is not included in background requests, such as those initiated by scripts, iframes, or references to images and other resources.
+
+SameSite=None:
+This disables sameSite restrictions altogether. Thus, browsers will send the cookie marked w/ this in all requests to the site that issued the cookie(target site). Essentially any 3rd party site can access cookies that have SameSite=none. 
+This should be used when the cookie is used for tracking or used by some 3rd party and donest allow access to anything sensitive. 
+Still, **anytime we see this we should try to find out what that cookie does** 
+Setting a cookie w/ SameSite=none requires the "Secure" attribute as well so it just specifies https is being used. So it would look like this: Set-Cookie: trackingId=0F8tgdOhi9ynR1M9wa3ODa; SameSite=None; Secure
+------------------------------------------------------------------------------------------------------------------------------------------
+Bypassing SameSite=Lax using GET requests: 
+
+In practice, servers aren't always fussy about whether they receive a GET or POST request to a given endpoint, even those that are expecting a form submission. If they also use Lax restrictions for their session cookies, either explicitly or due to the browser default, you may still be able to perform a CSRF attack by eliciting a GET request from the victim's browser.
+
+As long as the request involves a top-level navigation, the browser will still include the victim's session cookie. The following is one of the simplest approaches to launching such an attack:
+
+<script>
+    document.location = 'https://vulnerable-website.com/account/transfer-payment?recipient=hacker&amount=1000000';
+</script>
+Even if an ordinary GET request isn't allowed, some frameworks provide ways of overriding the method specified in the request line. For example, Symfony supports the _method parameter in forms, which takes precedence over the normal method for routing purposes. Other frameworks support a variety of similar parameters. 
+
+An example of this in a form would be: 
+<form action="https://vulnerable-website.com/account/transfer-payment" method="POST">
+    <input type="hidden" name="_method" value="GET">
+    <input type="hidden" name="recipient" value="hacker">
+    <input type="hidden" name="amount" value="1000000">
+</form>
+
+****
+MORE IMPORTANTLY: we can try to find these hidden params as normal (param miner, arjun, custom param lists...). Then we can simply try to add them to the GET request we use to access the form endpoint. Example: 
+https://vulnerable-website.com/account/transfer-payment?recipient=asdasd&amount=100&_method=GET
+
+Furthermore, if we just analyze the form inputs closely, we may be able to find useable params such as the names of hidden fields!!
+
+always try _method. ***** if this param is available, we can make a GET request to the form submit endpoint, but in the GET request, we can use this param to specify a POST request. Thus the cookies will still be sent and a POST request will be used. 
+
+IF WE CAN FIND AN OPEN REDIRECT OR XSS W/ THIS VULN, THE SEVERITY WILL BE MUCH HIGHER
+****
+------------------------------------------------------------------------------------------------------------------------------------------
+Bypassing SameSite Restrictions with Vulnerable Sibling/Subdomains:
+
+Whether you're testing someone else's website or trying to secure your own, it's essential to keep in mind that a request can still be same-site even if it's issued cross-origin.
+
+Make sure you thoroughly audit all of the available attack surface, including any sibling domains. In particular, vulnerabilities that enable you to elicit an arbitrary secondary request, such as XSS, can compromise site-based defenses completely, exposing all of the site's domains to cross-site attacks.
+
+In addition to classic CSRF, don't forget that if the target website supports WebSockets, this functionality might be vulnerable to cross-site WebSocket hijacking (CSWSH), which is essentially just a CSRF attack targeting a WebSocket handshake. For more details, see our topic on WebSocket vulnerabilities.
+*** MUST LEARN WEBSOCKET BEFORE DOING THIS**
+------------------------------------------------------------------------------------------------------------------------------------------
+Bypassing SameSite w/ Newly Issued Cookies: 
+**VERY IMPORTANT**
+Cookies with Lax SameSite restrictions aren't normally sent in any cross-site POST requests, but there are some exceptions.
+
+As mentioned earlier, if a website doesn't include a SameSite attribute when setting a cookie, Chrome automatically applies Lax restrictions by default. However, to avoid breaking single sign-on (SSO) mechanisms, it doesn't actually enforce these restrictions for the first 120 seconds on top-level POST requests. As a result, there is a two-minute window in which users may be susceptible to cross-site attacks.
+
+** This only applies if the browser sets SameSite=Lax so if we see it explicitly set in the response headers this technique is not useable
+
+It's somewhat impractical to try timing the attack to fall within this short window. On the other hand, if you can find a gadget on the site that enables you to force the victim to be issued a new session cookie, you can preemptively refresh their cookie before following up with the main attack. For example, completing an OAuth-based login flow may result in a new session each time as the OAuth service doesn't necessarily know whether the user is still logged in to the target site.
+
+To trigger the cookie refresh without the victim having to manually log in again, you need to use a top-level navigation, which ensures that the cookies associated with their current OAuth session are included. This poses an additional challenge because you then need to redirect the user back to your site so that you can launch the CSRF attack.
+
+Alternatively, you can trigger the cookie refresh from a new tab so the browser doesn't leave the page before you're able to deliver the final attack. A minor snag with this approach is that browsers block popup tabs unless they're opened via a manual interaction. For example, the following popup will be blocked by the browser by default:
+
+window.open('https://vulnerable-website.com/login/sso');
+To get around this, you can wrap the statement in an onclick event handler as follows:
+
+window.onclick = () => {
+    window.open('https://vulnerable-website.com/login/sso');
+}
+This way, the window.open() method is only invoked when the user clicks somewhere on the page

