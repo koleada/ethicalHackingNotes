@@ -1,0 +1,12 @@
+1. Identify juicy areas - ALL PARAMETERS/ DATA WE CAN CONTROL SHOULD BE TESTED! Use param miner for header, query param, cookie, and body reflections/ hidden inputs keep track of all hidden params we find. Test ALL normal URL params and see if they are reflected. Identify all contact forms/ data input that will be stored out of our site (Blind xss). Identify any forms/inputs that will be stored and potentially shown to other users. 
+	- **we should be making a list of all reflections/interesting inputs we find for each domain we examine. 
+
+2. Once we have our list, we can examine how the site defends against xss. We should put their csp (either the <meta> tag or the CSP response header) into the CSP evaluator website this will help us identify bypasses. We can also just open up the dev tools console and do the following: 
+document.getElementsByTagName('H2')[0].innerHTML = '<iframe srcdoc="<script>confirm(document.cookie)</script>"></iframe>'     just replace w/ other payloads we want to try. if a payload doesn't pass the csp well find an error. 
+
+3. once we have a good understanding of the sites CSP and potential bypass techniques (see csp bypass notes) the next step is to see what context were in. Are we in a html element attribute? are we being reflected by innerHTML? are we being put into a link/ <a> tag? To find this out we need to examine the JS code and search for the class or id of the element were being reflected into. This will inform our attack strategy. We really want to find reflections that are happening due to custom JS code as opposed to a 3rd party script, but ultimately either will work. 
+
+4. Craft/use payloads that will work in the context were in. What chars are allowed? how does the sanitizer work? <svg> based payloads? really messy payloads that get fixed by the browser etc. work to get html injection. for this inital detection/ to get htmli we should be using something like 
+<img/src=1> this will show a visiable result if we are able to break the context and get htmli. a script tag would not show a visible result and is much more likely to be blocked, sanitized by the site. 
+
+5. once we know how were getting sanitized we can craft/use even more targeted payloads to bypass these restrictions. We should really look into using URI based (javascript:alert()) payloads whereever they are applicable. 

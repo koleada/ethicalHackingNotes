@@ -1,0 +1,130 @@
+H2Csmuggling:	
+
+******THUROUGHLY TEST NGINX(run nginxpwner to find nginx specific crlf and other vulns), HAProxy, Traefik, Nuster WEBSITES but others can most definitely be vulnerable. CRLF will also be a huge advantage here. if we do find crlf we should be testing manually as well as tooling. 
+
+******In addition to the aforementioned rev proxies/load balancers, azure, cloudflare and a number of other technologies were vulnerable to this in 2021. It has since been fixed but old versions, misconfigs or a simple crlf could potentially get through and result in smuggling.  
+
+frontend HTTP/2 or HTTP/1.1 -> downgrades to HTTP/1.1 backend/rev proxy we can trick the rev. proxy to opening a websocket between us and the backend, allowing us to bypass all authorization/authentication controls on the rev. proxy, WAF processing etc so we can access internal/forbidden resources potentially get other vulns as well from bypassing the WAF etc. of course this is contingent on the H2C connection being established. 
+
+This is fairly uncommon but it could happen. Again just try to run tooling on all directories of the site and go from there.
+
+
+**GENERAL TESTING/TOOLING NOTES: we have 2 tools to automatically search for this -> one from assetnote in go and another in python i believe. also more importantly this is one of the only smuggling types that can differ based on particular endpoints/ directories. Normal smuggling is a server-specific issue so if one page isn't vulnerable the other pages almost always aren't. h2c is different though. Aim to test all unique directories or endpoints - to do this manually browse the application w/ zap, maybe launch a spider too. The rev. proxies can map certain paths to different backends hence why running this on many different endpoints is important. THE SAME GOES FOR NORMAL REQUEST SMUGGGLINGCopy all URLs for that domain and pass it to one of these tools. **
+
+*****unfurl made by tomnomnom grabs just the domains/paths from a url, thus we can use the following commands to grab the paths. this will be extremely useful when calling the h2c tools && especially nginxpwner!! syntax **cat allDomomainUrlsFromZap | unfurl paths | cut -d"/" -f2-3 | sort -u > /tmp/pathlist**  *****
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+TOOL SYNTAX:
+-> flag = forbidden (403) endpoint. Note once we discover this we can also bypass any WAF on the website so xss/cache posionsing, host header etc attacks can be much easier. 
+
+ASSETNOTE SMUGGLER SYNTAX: "go run ./cmd/h2csmuggler smuggle http://52.188.24.146 'http://52.188.24.146/flag' -H 'Accept: */*' -v -P" 
+
+python version: "h2csmuggler.py -x https://jump-h2c-host.assetnote.dev https://jump-h2c-host.assetnote.dev/flag"
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+BASIC INFO:
+
+h2c = HTTP Over Cleartext. h2c differs from normal http connections by upgrading this standard connection to a persistent one. The upgraded connection uses the http2 binary protocol for ongoing communication instead of a standard single request nature of plaintext http. 
+
+The smuggling issues arises due to the usage of a reverse proxy/ load balancer. A reverse proxy is used to process and forward HTTP requests coming from the frontend to the backend it then receives the backend's response and sends it back up to the frontend. When the **Connection: Upgrade** header is present in an HTTP request (commonly seen in websocket connections -- SEE BELOW FOR MORE ON THESE), the reverse proxy maintains a persistent connection between client and server thus facilitating continuous data exchange between the two. for h2c connections the RFC says the following 3 headers must be there:
+
+Upgrade: h2c
+HTTP2-Settings: AAMAAABkAARAAAAAAAIAAAAA
+Connection: Upgrade, HTTP2-Settings
+
+the vulnerability manifests when after the connection is upgraded, the reverse proxy is unable to manage individual requests assuming its job of routing is complete once the ugraded connection is established. Exploiting this vulnerability allows for the reverse proxy's rules to by completely bypassed such as path routing, authentication and WAF processing so long as the h2c connection is initiated successfully.
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+WEBSOCKET CONNECTIONS: this type of connection is used for real time communication between clients and servers. This type of connection is essential for **apps that need instant updates like multiplayer games, messagin and real-time chats**. We can find these types of connections in a few ways. 
+1. looking at/ searching the source code for the ws:// or wss://
+2. using chrome dev tools on the network tab which shows network websocket connections. 
+3. using the WebSocket tab in ZAP see here for a bit more testing info on websockets: https://owasp.org/www-project-web-security-testing-guide/v41/4-Web_Application_Security_Testing/11-Client_Side_Testing/10-Testing_WebSockets
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+COMMONLY VULNERABLE TECHNOLOGIES:
+
+Vulnerable Proxies by default: This vuln only happens based on how the reverse proxy handles **Upgrade** and occasionally **Connection** headers from the request. The following proxies inherently forward these headers during proxy-pass(the action of the reverse proxy receiving requests and forwarding them to another server) and therefore and enabling h2c smuggling:
+- HAProxy
+- Traefik
+- Nuster
+Vulnerable proxies depending on config: The following services do not inherently forward both headers during proxy-pass but if configured improperly may allow unfiltered forwarding of **Upgrade** and **Connection** headers (as we can see many very common servers are listed): 
+- AWS ALB/CLB
+- NGINX
+- Apache
+- Squid
+- Varnish
+- Kong
+- Envoy
+- Apache Traffic Server
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+Exploitation/Testing: 
+
+** IF WE CAN FIND CRLF WE VERY WELL MAY BE ABLE TO BYPASS THE HEADER RESTRICTIONS AND THUS GET SMUGGLING **
+
+*********
+It's crucial to note that not all servers inherently forward the headers required for a compliant H2C connection upgrade. As such, servers like AWS ALB/CLB, NGINX, and Apache Traffic Server, among others, naturally block H2C connections. Nonetheless, it's worth testing with the non-compliant Connection: Upgrade variant, which excludes the HTTP2-Settings value from the Connection header, as some backends may not conform to the standards.
+	- in other words especially on these servers we should be trying to pass just the two header (Upgrade and Connection) in our request
+*********
+
+NOTE: Irrespective of the specific path designated in the proxy_pass URL (e.g., http://backend:9999/socket.io), the established connection defaults to http://backend:9999. This allows for interaction with any path within that internal endpoint, leveraging this technique. Consequently, the specification of a path in the proxy_pass URL does not restrict access.
+
+The 2 tools (mentioned in the very beginning of this doc) word by attempting to **circumvent proxy-imposes protections** by establishing an h2c connection
+
+*********
+**use nginxpwner to scan nginx sites for many vulns including nginx specific crlf** nginxpwner usage: 
+
+Target tab in Burp, select host, right click, copy all URLs in this host, copy to a file
+**cat urllist | unfurl paths | cut -d"/" -f2-3 | sort -u > /tmp/pathlist**  
+Or get the list of paths you already discovered in the application in some other way. Note: the paths should not start with /
+Finally:
+**python3 nginxpwner.py https://example.com /tmp/pathlist**
+*********
+---------------------------------------------------------------------
+WEBSOCKET SMUGGLING:
+Websocket smuggling, unlike creating a HTTP2 tunnel to an endpoint accessible via a proxy, establishes a Websocket tunnel to bypass potential proxy limitations and facilitate direct communication with the endpoint.
+
+There are essentially 2 general scenarios where we could see this. 
+
+1. This scenario involves a public websocket api and some inaccessible internal assets. the client initiates by sending an Upgrade request to the reverse proxy with a **Sec-WebSocket-Version** header that is incorrect (normal one being 1337 i think). The proxy failing to validate the header assumes its valid and forwards it to the backend. The backend responds with a 426 status code indicating incorrect websocket version. The proxy overlooks the backends status and assume the websocket is ready to go and relays that response to the client. Thus we essentially mislead the proxy into believing a websocket connection has been established. The proxy then maintains an open TCP/TSL connection between the client and the backend giving us access to internal assets. 
+(Affected reverse proxies include Varnish, which declined to address the issue, and Envoy proxy version 1.8.0 or older, with later versions having altered the upgrade mechanism. Other proxies may also be susceptible.)
+
+2.  The scenario involves a public websocket api and a public REST api as well as some internal assets. this is a more complex attack. The client sends a POST request to the REST API that has the header **Connection: Upgrade**. Say we have NGINX as the rev. proxy, would then interpret this as a standard Upgrade request based solely on the Upgrade header we included neglecting all other aspects. The backend executes the public API and reaches out to an attacker controlled domain and responds w/ status code 101 (switch protocols). Once NGINX receives the backend response w/ code 101 it believes a websocket connection as been established due to validating only the status code. 
+Ultimatly nginx is tricked into believing a websocket connection exists and once again we can access internal resoruces from the opne connection. 
+
+**Most reverse proxies are vulnerable to this scenario, but exploitation is contingent upon the presence of an external SSRF vulnerability, typically regarded as a low-severity issue. this technique also relies on an api endpoint being able to return status code 101 making it complex and rare**
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

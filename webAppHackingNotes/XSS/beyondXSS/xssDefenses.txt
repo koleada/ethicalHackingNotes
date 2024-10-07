@@ -1,0 +1,229 @@
+1st Line of Defense is always Sanitization:
+encoding, removal/sanitization, escaping
+
+whenever were validating a user input URL we must use "new URL()" for parsing and make judgemnets based on the return value. Do not use regex or something like startswith() as it is extremely easy to create vulns like this.
+
+Similarly for reflecting user input. We cannot use innerHTML(). we instead must use innerText or innerContent as this will treat the user input as plain text. 
+
+In vue.js and react they have built in this logic. It treats everything as plaintext unless devs use special methods like dangerouslySetInnerHTML() or 
+v-html. 
+
+As for the backend in php you use the htmlspecialchars function which encodes certain chars. However, backends dont really handle displaying content anymore, this is now done using templating engines. for example handlebarsjs treats {{ name }} as encoded output by default. To get raw output youd have to do {{{ name }}}. Similiarly in larvel's blade {{ $text }} is encoded while {!! text !!} is not. In Python's Jinja, {{ text }} is encoded, while {{ text | safe }} means the text is safe and can be displayed in its normal format. Very important to be aware of this when coding always use the safe approach espically when working with dynamic <a href> as discussed in the last section. 
+
+** always use stuff that someone else has built dont reinvent the wheel. If the language does not directly have something a library in that lang does **
+
+**DOMPurify** is the best sanitization library out there. Be on the lookout for DOMPurify Bypasses because chances are there will be a lot of xss out there. This library is purely for sanitization. It only allows "safe" tags like h1, div, p, style, span etc (all of which can be exploited). DOMPurify completely remove all "bad" chars and does an amzzing job of doing so. However, DOMpurify allows devs to set up configurations so they can allow certain tags and attributes in their DOM. This will still filter out obviously dangerous content but does still leave room for potential vulns. For example a DEV could configure DOMpurify to not filter <script> tags if they wanted to. 
+
+One common mess up that has been exploited has to do with comments. Often devs want to keep comments intact but this can lead to errors when allowing thme in their DOMPurify config. Something like this: <!-- foo="bar--><s>Hi</s>" --> would result in the <s>Hi</s> breaking out of the context. 
+
+The point is even w/ these amazing sanitizers the smallest mistake can be a vuln.
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+2nd Line Of Defense is the CSP 
+
+**FOR OUR PURPOSES WERE MOST CONCERNED ABOUT THE 'script-src' directive. 
+
+***USE https://csp-evaluator.withgoogle.com/  to evaluate a companies csp and detect holes.*** 
+
+its important to note, huge companies w/ huge bounty programs (eg facebook) have unsafe-inline set on their csp. So this is not a perfect defense at all. 
+
+Due to santizers failing and how complex and messy production code is devs need more defenses. 
+
+CSP, short for Content Security Policy, allows you to establish rules for your web page and inform the browser that only content that adheres to these rules should be allowed. Any content that does not comply should be blocked.
+
+2 ways to include CSP - 1. using the response header Content-Security-Policy (look for CRLF) or 2. by using a <meta> tag. 
+It is possible to do something w/ the csp attribute of an iframe but thats much less common. 
+
+This is the second line of defense because when sanitization fails the CSP can still block it. This is done by either disabling all inline scripts or implementing a hash or nonce that is used to check if a script is safe. if we see script-src "none" in the csp meta tag this means no inline JS will be executed on the page at all. 
+--------------------------------------------------------------------------
+DIRECTIVES and RULES:
+
+If script-src is not set for the CSP it will use default-src. ****The default-src DOES NOT BLOCK base-uri or form-actio, in other words form based payloads and payloads that use <base> would work in the default. (see payloads doc)****
+
+There are many of this directives like style-src, font-src, img-src, frame-src and a ton more. these also can change or be added to. There are currently csp configs that are not supported by browsers. 
+
+Each directive also has rules associated with it. Here are the common rules that can be set for each different directive:
+1. * - Allows all URLs except data:, blob:, and filesystem:.
+2. 'none' - Doesn't allow anything.
+3. 'self' - Only allows same-origin resources.
+4. https: - Allows all HTTPS resources.
+5. example.com - Allows specific domains (both HTTP and HTTPS).
+6. https://example.com - Allows specific origins (HTTPS only).
+
+For example, script-src * is basically equivalent to not setting any rule(allows all URLs, but it's worth noting that inline script is still blocked), while script-src 'none' completely blocks the execution of any JavaScript. Once again we can see that inline scripts are blocked by default. Never test with script tags. 
+
+Rules can also be combined like this: "script-src 'self' cdn.example.com www.google-analytics.com *.facebook.net". it all depends on the sites configuration sometimes scripts are self hosted so its just self, sometimes they use scripts from a cdn or google ads etc so they will need to run JS from there.
+
+The complete CSP is a combo of these directives and rules separated w/ ;s like this:   
+default-src 'none'; script-src 'self' cdn.example.com www.google-analytics.com *.facebook.net; img-src *;
+-------------------------------------
+OTHER SCRIPT RULES: 
+
+In addition to specifying the URLs of the resources to be loaded, there are other rules that can be used. Like after setting CSP inline scripts and eval are blocked by default. Heres what we mean by 'inline scripts': 
+1. Code directly placed inside <script> tags (should be loaded from an external source using <script src>)
+2. Event handlers written in HTML, such as onclick
+3. The javascript: pseudo-protocol
+
+To allow these to run the "unsafe-inline" rule must be added. Same goes for eval we would need to add "unsafe-eval", which is a catch-all for a bunch of different functions like setTimeout('alert(1)'). So it wouldn't work without "unsafe-eval" being set. If we dont see this it should be a red flag. 
+
+There is also a 'nonce-xxx', which means generating a random string on the backend, for example, a2b5zsa19c. Then, a script tag with nonce=a2b5zsa19c can be ran inline like this: <script nonce=a2b5zsa19c>alert(1)</script>
+
+Similarly we could do 'sha256-abc...' rule, which allows specific inline scripts based on their hash. This just takes hashes of all the scripts they want to allow and if the hash doesn't match any of the allowed ones it cannot run. 
+
+There is one more important one 'strict-dynamic', which means: "Scripts that comply with the rules can load other scripts without being restricted by CSP." This would be good for a situation like this: 
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Security-Policy" content="script-src 'nonce-rjg103rj1298e' 'strict-dynamic'">
+</head>
+<body>
+  <script nonce=rjg103rj1298e>
+    const element = document.createElement('script')
+    element.src = 'https://example.com'
+    document.body.appendChild(element)
+  </script>
+</body>
+</html>
+
+--------------------------------------------------------------------------
+CONFIGURING CSP:
+
+CSP should usually starts with default-src 'self', allowing same-origin resources by default.
+
+Also we must never use 'unsafe-inline' and 'unsafe-eval', as having these two doesn't make much difference compared to not having CSP at all.
+
+However, in reality there are very often cases that 'force' devs to add unsafe inline to their CSP. Stuff like google analytics is an inline script. The documentation does say to add a nonce to it or get the hash of it and add a rule to the CSP. But to user certain features like "custom JS variable" unsafe-eval must be enabled. This shows it is common for devs and companies to feel forced to do unsafe things. ( use the "CSP evaluator" website to check for holes in your csp)
+
+*****
+If a csp is not properly configured it will block resources from loading and probably break your website. So conveniently there is a directive called 'report-to'. This directive is used to just sent a report if people break the csp. 
+
+There is a http header called Content-Security-Policy-Report-Only which doesn't block anything it just reports whrn a resource is loaded that breaks the rules. 
+
+These should both be red flags if we see them. But they are typically used just to find where things may be breaking the rules so devs can configure things correctly. 
+*****
+
+
+facebooks CSP just as an example we can look at / refer to: 
+
+default-src
+  *
+  data:
+  blob:
+  'self'
+  'wasm-unsafe-eval'
+script-src
+  *.facebook.com
+  *.fbcdn.net
+  *.facebook.net
+  *.google-analytics.com
+  *.google.com
+  127.0.0.1:*
+  'unsafe-inline'
+  blob:
+  data:
+  'self'
+  'wasm-unsafe-eval'
+style-src
+  data:
+  blob:
+  'unsafe-inline'
+  *
+connect-src
+  secure.facebook.com
+  dashi.facebook.com
+  dashi-pc.facebook.com
+  graph-video.facebook.com
+  streaming-graph.facebook.com
+  z-m-graph.facebook.com
+  z-p3-graph.facebook.com
+  z-p4-graph.facebook.com
+  rupload.facebook.com
+  upload.facebook.com
+  vupload-edge.facebook.com
+  vupload2.facebook.com
+  z-p3-upload.facebook.com
+  z-upload.facebook.com
+  graph.facebook.com
+  'self'
+  *.fbcdn.net
+  wss://*.fbcdn.net
+  attachment.fbsbx.com
+  blob:
+  data:
+  *.cdninstagram.com
+  *.up.facebook.com
+  wss://edge-chat-latest.facebook.com
+  wss://edge-chat.facebook.com
+  edge-chat.facebook.com
+  edge-chat-latest.facebook.com
+  wss://gateway.facebook.com
+  *.facebook.com/rsrc.php/
+  https://api.mapbox.com
+  https://*.tiles.mapbox.com
+block-all-mixed-content
+upgrade-insecure-requests;
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+Third Line of Defense: Reducing the Impact Scope
+
+This final layer assumes that XSS will always happen in any environment and formulates protection strategies to mitigate the damage of the inevitable xss.
+
+Each company should use the 3 sectuirty features according to their risk tolerance. They should create a security architecture around their own needs. Risk tolerance will be very different between a blog website and a cryptocurrency exchange for example. 
+
+Once we find an XSS bug, the attacker can leverage it to steal cookies/auth tokens or even call API endpoints to change the password. Since this is running on the victims browser the attacker can leverage this to get account takeover in many scenarios. These defenses here are essentially used to limit the impact of XSS and account takeover. 
+
+Defense Strat 1: MFA/2FA
+Attackers can only access sensitive victim data if they send a request to the backend and the backend accepts that request is accepted by the sever. This is not just a feature of login pages. This is also often used to protect other actions like changing passwords and sending a payment. Thus, this would prevent the attacker from just using their auth token to get ATO as the victim would be required to input a code or some extra info to actually perform the action. For example if a banking app did not have 2FA on payments/transfers if an attacker found an xss they could exploit it to call the transfer API (for example) on the victims browser and steal all their money.... from a single xss. 
+	- the most secure implementation would be to require a 2FA SMS codefor all API calls that do a sensitive action. Since this makes for a bad UI its 	  not done often. Usually its 2FA is required only for major sensitive actions. Other API calls that retrive data typically dont require 2FA.
+
+Defense Strat 2: Preventing Token Theft
+When we say token here we are talking about a session token, auth token, oauth token, JWT token, or some other cookie used for session handling. When these are stolen the attacker can use them to access privileged functionality or information from the vicitms account and access that data themselves. 
+
+Even if the token uses HttpOnly the attacker can leverage the fetch('/api/whater') function in their XSS payload to access the sensitive data/ functions. This is because the token is automatically included in fetch requests that are running in the victims browser. 
+
+Cookie Limitations:
+1. HttpOnly: There are still differences between an HttpOnly cookie and a non HttpOnly one. Non HttpOnly allows the attacker to steal the cookie and send requests using it from their own server. If it is HttpOnly the attacker can only fetch the data in the victims browser.
+2.  Length Limitations on input fields to restrict the number of characters thus restricting the JS scripts that could be called w/ xss
+3. SOP The SOP restriction means that the attacker would not be able to access those sensitive resources on other subdomains. So if there a.google.com and b.google.com and the attacker gets xss on a, they would not be able to access whatever sensitive info there is on b UNLESS that subdomain also uses the same cookie and store it in localstorage. 
+4. There also could be a time limit on the cookie so the attacker would only be able to send requests with it until it expires. 
+
+IMPORTANT: for ATO
+****************************
+We should always use httponly if possible as this is the best way to restrict cookie accessibility. There is an other solution though store the sensitive token/cookie in a JS variable and wrap it in a closure so it cannot be accessed from outside. This prevents an attacker from "directly" accessing the cookie completely because it would be outside of the scope of our injected JS. HOWEVER an attacker can still access the cookies using window.fetch like this: 
+window.fetch = function(path, options) {
+  console.log(options?.headers?.Authorization)
+}
+API.getProfile()
+by replacing this implementation of fetch we can intercept the params passed to the function and indirectly access the token 
+*****************************
+
+ The more secure way of limiting access is to prevent xss from interfering w/ execution enviorment that has the token achieving context isolation. In web frontend, this can be accomplished using Web Workers. By using Web Workers, a new execution environment can be created to isolate it. The idea is to put all API network requests in a worker. Due to the isolation of the execution environment, unless there is XSS in the worker, the main thread cannot interfere with the worker and cannot access its data. This ensures the security of the token. This is much harder and more expensive to implement because it takes a lot of adjustment and architecture changes. 
+
+Defense Strat 3: Limit API Calls
+As mentioned attackers can execute API calls even if they dont steal the users cookies. Unless we use a Web Worker again described above which makes it so api calls wont work without the cookie being attached to the request. All API requests should go through webworkers.
+
+Defense Strat 4: Limit Token Scopes
+Similar to when devising defense strategies against XSS, it is important to minimize the damage in case XSS occurs. Therefore, the last measure is to assume that the token will be exploited and consider what else can be done to reduce the damage. The most intuitive approach is to limit the scopes of the token, so that it cannot perform too many actions. Of course, backend access control is a must, but the frontend can also do more.
+
+In this case, another solution called Backend For Frontend (BFF) can be used. BFF is a backend server specifically for the frontend, and all frontend requests go through BFF. Therefore the token obtained in the frontend is only used to communicate w/ BFF thus allowing us to restrict permissions on the BFF side like by blocked all requests to internal endpoints and making sure the frontend token cannot be used to call internal APIs. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

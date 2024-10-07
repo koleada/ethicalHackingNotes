@@ -1,0 +1,3 @@
+Universal XSS is the most powerful. 
+
+This type of XSS targets the browser and any built in plugins not the website itself. Since its attacking the browser, the website doesn't even need to have any issues just a simple static page can be vulnerable to this. It basically allows you to execute code on any website.

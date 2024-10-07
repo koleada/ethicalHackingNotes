@@ -1,0 +1,111 @@
+Sanitizers can often be bypassed using Mutation XSS (mXSS)
+
+How do sanitizers work? 
+First we must consider that sanitization is parsing. Parsing is HARD especially parsing javascript and html with all of the nested stuff. With complexity comes bugs and complacency. 
+
+The general flow of a sanitizer is as follows:
+1. Parse the input into a DOM tree.
+2. Delete invalid nodes and attributes based on the configuration file.
+3. Serialize the DOM tree into a string.
+4. Return the string.
+
+Browsers are considerate!
+The browser is a considerate software that, in order to handle various situations and comply with specifications, may not display the HTML exactly as you see it. If we put say a single H1 in a table, the browser will automatically put the H1 outside of the table and just have the table as an empty tag. In other words the browser changes the structure of the HTML to adhere to the specifications and general best practices. 
+
+So the browser just made our innermost html tag jump out of the parent context. 
+
+ex: 
+content.innerHTML = '<table><h1>hello</h1></table>' 	will be changed by the browser to <h1>hello</h1></table>
+
+The browser is basically fixing invalid html and rendering it instead of throwing an error and rendering a blank page. 
+
+Another example: <svg><p>hello</svg> will automatically be corrected to <svg></svg><p>hello</p>
+
+even <svg></p>hello</svg> will be corrected to <svg><p></p>hello</svg>	 **note on this one the p tag gets corrected but our text still stays between the svg. 
+chrome has currently fixed this so now it would be <svg></svg><p></p>hello. similarly if we pass <svg></p>hello</svg> to .innerHTML() it will output the same exact thing. So the inner most text completely escapes the 2 tags it was within originally. 
+
+If we passed <svg><p></p>hello</svg> to a sanitizer it would look completely benign with nothing to filter. The next step is to serialize the DOM tree the sanitizer made into a string (resulting in the same thing but string form). This would then be passed to the frontend as its deemed safe BUT once rendered the html would change and 'hello' would escape its previous context resulting in a new thing as described above. 
+
+USING THIS METHOD WE CAN MAKE ANY HTML ELEMENT JUMP OUT OF AN <svg> TAG!!!
+
+<style> is another magical tag because everything inside of it is interpreted as text. for example:   <style><a id="test"></a></style> would just result in the <a> tag being interpreted as text and it would not render. *****IN DEV TOOLS TEXT APPEARS AS BLACK WHERE RENDERED TAGS ARE COLORED**********
+
+HOWEVER
+
+if we were to wrap the <style> tag in an <svg> THE <a> WOULD BE INTERPRETED AS AN HTML ELEMENT AND WOULD BE RENDERED! 
+
+THIS IS WHERE STUFF GETS CRAZY. consider the following HTML: 
+<svg>
+  <style>
+    <a id="</style><img src=x onerror=alert(1)>"></a>
+  </style>
+</svg>
+that first </style> would not close out the <style> tag. it would simply be interpreted as part of the <a> tags id along with the <img>. but if we were to remove the <svg> that first </style? WOULD close out the style tag. resulting in the <img> xss payload to be rendered as an HTML element. 
+
+Putting it all Together: 
+mXSS = making elements jump out of <svg> typically uses <svg> and <style> 
+
+in 2019 DOMPurify released an update to fix an mXSS vulnerability caused by: <svg></p><style><a id="</style><img src=1 onerror=alert(1)>">
+
+When passed to inner html this results in the <img> jumping out of the svg and the <a> to be considered as text (in both spots) this is how it looks after the browser renders it: 
+<svg></svg>
+<p></p>
+<style><a id="</style>
+<img src=1 onerror=alert(1)>
+"></a>
+</style>
+
+Surprisingly what the browser does here is actually complient with the HTML specifications. Currently this behavior was fixed by browsers and dompurify so i dont actually think this specific mutation will work on chrome. Still using payloads w/ svg and style can still work in some contexts. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
