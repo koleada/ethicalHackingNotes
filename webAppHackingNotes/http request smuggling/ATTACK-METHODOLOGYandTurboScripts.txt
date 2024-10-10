@@ -24,6 +24,7 @@ OF course, first, we need to find targets really any website could be vulnerable
 
 - have notes pulled up while testing. There are so many approaches that we need to consider. We will also be creating a comprehensive list of obfuscations and methods we can try out while testing. The possibilities are really endless with this. 
 
+- **WE SHOULD BE MANUALLY TESTING FOR GET REQUEST BASED CL.0 DESYNC w/ OBFUSCATED CL HEADER**. This can happen on HTTP/1.1 or servers that use HTTP/2 but downgrade it to /1.1 for the backend!! => should be done in repeater using send in group feature. prime canidates are static files and pages that cause a 301 or 302 redirect.
 
 POC/Testing Strategy:
 
@@ -36,6 +37,7 @@ Spin-up interactsh-client while during manual testing. OOB connections are a gre
 
 Wonderful turbo intruder script for request smuggling. Note that it includes the attack and victim requests. Also note there was a CRLF used in the attacker request. This just uses the \n instead of the full \r\n thus creating a discrepancy and enabling smuggling. If the target isn't vulnerable to this specific CRLF well have to remove it. Still, use one of these scripts!!! 
 
+**requestsPerConnection MUST BE SET TO 1
 1. 
 def queueRequests(target, wordlists):
     engine = RequestEngine(endpoint='https://██████████:443',

