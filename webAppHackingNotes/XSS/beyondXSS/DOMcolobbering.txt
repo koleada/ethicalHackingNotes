@@ -1,0 +1,63 @@
+DOM CLOBBERING BACKGROUND INFO: 
+
+THIS IS AN ADVANCED TECHNIQUE THAT REQUIRES DEEP KNOWNLEDGE OF THE TARGETS JS and HOW ELEMENTS BEHAVE. REFER TO HERE FOR MORE INFO:
+https://aszx87410.github.io/beyond-xss/en/ch3/dom-clobbering/
+
+DOM clobbering is yet another, very interesting way to manipulate javascript via html injection. 
+
+normally when we would think about how to run some javascript when, say, an HTML button is clicked we would think to do:
+document.getElementById('btnId').addEventListener('click',() => {alert(1)});
+
+however, when an element has an Id it can be accessed DIRECTLY. eg:
+<button id="btn">click me</button>
+<script>
+  console.log(window.btn) // <button id="btn">click me</button>
+</script>
+
+this means in javascript w can do btn.onclick=()=>alert(1)
+
+this behavior can happen from 2 different html attributes: 
+1. The value of the name content attribute for all embed, form, img, and object elements that have a non-empty name content attribute.
+2. The value of the id content attribute for all HTML elements that have a non-empty id content attribute.
+
+in other words besides just accessing via Id we can also access via the name attribute for these elements:
+<embed name="a"></embed>
+<form name="b"></form>
+<img name="c" />
+<object name="d"></object>
+
+The main takeaway from this is that we can influence JavaScript through HTML elements. We can leverage this behavior to craft attacks that uses the DOM to overwrite certain elements, this technique is known as DOM clobbering. 
+------------------------------------------------------------------------------------------------------------------------------------------------------------ 
+For this technique to be possible there must be a way to include our own html in the page or in some way influence the DOM. In other words we need html injection. This attack could be very beneficial because it does not use traditional XSS payloads that are all to often filtered/handled. 
+
+For example lets say theres a comment board where we can post comments. We tested some traditional XSS based payloads by they were sanitized or in some way did not work. However, html attributes are able to pass through and we can achieve html injection. 
+
+
+Say the page has a script that has a conditional check eg if(window.TEST_SCRIPT) if we can inject an element that has 'TEST_SCRIPT' as the Id (or name) we can overwrite the variable so the conditional is always true. 
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

